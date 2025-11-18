@@ -1,4 +1,4 @@
-#18/Nov/2025 12:05am Colombia
+#18/Nov/2025 2:27am Colombia
 
 import numpy as np
 import random
@@ -6,6 +6,7 @@ import matplotlib as mpl
 from matplotlib import pyplot as plt, image as mpimg, transforms as mtransforms
 from matplotlib.patches import Rectangle, Ellipse, Polygon
 from matplotlib.lines import Line2D
+from matplotlib.path import Path  # Necesario para roipoly
 
 
 
@@ -4995,3 +4996,252 @@ def invmoments(B):
     hu[6] = d21_03*s30_12*(s30_12**2 - 3.0*s21_03**2) - d30_12*s21_03*(3.0*s30_12**2 - s21_03**2)
 
     return hu
+#--------------------------------------------------------------------------------
+    
+def roipoly(I_or_m, c_or_n=None, r_or_c=None, r=None, return_coords=False):
+    """
+    Especifica región de interés (ROI) poligonal.
+    Compatible con sintaxis MATLAB roipoly.
+
+    Sintaxis
+    --------
+    BW = roipoly(I, c, r)
+        Crea máscara del polígono con vértices (c, r) sobre imagen I.
+        
+    BW = roipoly(m, n, c, r)
+        Crea máscara de tamaño m×n con polígono de vértices (c, r).
+
+    BW = roipoly(I)
+        Modo interactivo: muestra la imagen I y permite seleccionar la ROI
+        con clics del ratón. Clic izquierdo: vértice; clic derecho o Enter:
+        terminar el polígono.
+
+    [BW, xi, yi] = roipoly(I, c, r, return_coords=True)
+        Retorna también las coordenadas del polígono cerrado.
+
+    Parámetros
+    ----------
+    I : ndarray
+        Imagen de entrada (2D o 3D). Se usa solo para obtener dimensiones.
+    m : int
+        Número de filas de la máscara (alternativa a I).
+    n : int
+        Número de columnas de la máscara (alternativa a I).
+    c : array-like
+        Coordenadas X (columnas) de los vértices del polígono.
+    r : array-like
+        Coordenadas Y (filas) de los vértices del polígono.
+    return_coords : bool, opcional
+        Si True, retorna (BW, xi, yi). Por defecto False.
+
+    Retorna
+    -------
+    BW : ndarray (bool)
+        Máscara binaria con True dentro del polígono, False fuera.
+    xi : ndarray (solo si return_coords=True)
+        Coordenadas X del polígono cerrado.
+    yi : ndarray (solo si return_coords=True)
+        Coordenadas Y del polígono cerrado.
+
+    Notas
+    -----
+    - El polígono se cierra automáticamente si no está cerrado.
+    - Coordenadas c son columnas (X), r son filas (Y).
+    - Convención 0-based en Python: píxeles en [0..cols-1], [0..rows-1].
+    """
+    # -----------------------------
+    # 1) Sintaxis: roipoly(m, n, c, r)
+    # -----------------------------
+    if isinstance(I_or_m, (int, np.integer)):
+        if c_or_n is None or r_or_c is None or r is None:
+            raise ValueError("roipoly(m, n, c, r) requiere 4 argumentos")
+
+        rows = int(I_or_m)
+        cols = int(c_or_n)
+        c_coords = np.asarray(r_or_c, dtype=float)
+        r_coords = np.asarray(r, dtype=float)
+
+    # -----------------------------
+    # 2) Sintaxis: roipoly(I, c, r)  o  roipoly(I) interactivo
+    # -----------------------------
+    elif isinstance(I_or_m, np.ndarray):
+        I = I_or_m
+        if I.ndim == 2:
+            rows, cols = I.shape
+        elif I.ndim == 3:
+            rows, cols = I.shape[:2]
+        else:
+            raise ValueError("I debe ser imagen 2D o 3D")
+
+        # 2a) Modo interactivo: roipoly(I)
+        if c_or_n is None and r_or_c is None:
+            import matplotlib.pyplot as plt
+
+            fig, ax = plt.subplots()
+            # Si la imagen es color, mostrarla tal cual; si es 2D, usar gray.
+            if I.ndim == 2:
+                ax.imshow(I, cmap="gray")
+            else:
+                ax.imshow(I)
+            ax.set_title(
+                "Seleccione ROI poligonal:\n"
+                "clic izq. = vértice, clic der. o Enter = terminar."
+            )
+            ax.axis("image")
+            ax.axis("off")
+
+            puntos = plt.ginput(n=-1, timeout=0)
+            plt.close(fig)
+
+            if len(puntos) < 3:
+                raise ValueError(
+                    "Se requieren al menos 3 puntos para definir un polígono."
+                )
+
+            c_coords = np.array([p[0] for p in puntos], dtype=float)
+            r_coords = np.array([p[1] for p in puntos], dtype=float)
+
+        # 2b) Modo clásico: roipoly(I, c, r)
+        else:
+            if c_or_n is None or r_or_c is None:
+                raise ValueError("roipoly(I, c, r) requiere 3 argumentos")
+
+            c_coords = np.asarray(c_or_n, dtype=float)
+            r_coords = np.asarray(r_or_c, dtype=float)
+
+    else:
+        raise TypeError("Primer argumento debe ser imagen (ndarray) o entero (m)")
+
+    # -----------------------------
+    # 3) Validaciones comunes
+    # -----------------------------
+    if len(c_coords) != len(r_coords):
+        raise ValueError("c y r deben tener la misma longitud")
+
+    if len(c_coords) < 3:
+        raise ValueError("Se necesitan al menos 3 vértices para un polígono")
+
+    # Cerrar polígono automáticamente si no está cerrado
+    if c_coords[0] != c_coords[-1] or r_coords[0] != r_coords[-1]:
+        c_coords = np.append(c_coords, c_coords[0])
+        r_coords = np.append(r_coords, r_coords[0])
+
+    # -----------------------------
+    # 4) Construcción de la máscara
+    # -----------------------------
+    vertices = np.column_stack((c_coords, r_coords))
+    poly = Path(vertices)
+
+    # Coordenadas de píxeles (0..rows-1, 0..cols-1)
+    Y, X = np.mgrid[0:rows, 0:cols]
+    puntos = np.column_stack((X.ravel(), Y.ravel()))
+
+    BW = poly.contains_points(puntos)
+    BW = BW.reshape(rows, cols)
+
+    if return_coords:
+        return BW, c_coords, r_coords
+    else:
+        return BW
+
+
+def roifilt2(h_or_I, I_or_BW, BW_or_fun, fun=None):
+    """
+    Filtra región de interés (ROI) en imagen.
+    Compatible con sintaxis MATLAB roifilt2.
+
+    Sintaxis
+    --------
+    J = roifilt2(h, I, BW)
+        Aplica filtro lineal h solo en la región definida por BW.
+        
+    J = roifilt2(I, BW, fun)
+        Aplica función fun solo en la región definida por BW.
+
+    Parámetros
+    ----------
+    h : ndarray (2D)
+        Kernel de filtro lineal (solo para sintaxis 1).
+    I : ndarray (2D)
+        Imagen de entrada en escala de grises.
+    BW : ndarray (bool)
+        Máscara binaria (True=ROI, False=fuera de ROI).
+        Debe tener el mismo tamaño que I.
+    fun : callable
+        Función a aplicar en la ROI (solo para sintaxis 2).
+        Debe aceptar un array y retornar array del mismo tamaño.
+
+    Retorna
+    -------
+    J : ndarray
+        Imagen de salida:
+        - J[BW] contiene valores filtrados/procesados.
+        - J[~BW] contiene valores originales de I.
+    """
+    if fun is not None:
+        # Para evitar ambigüedad con la firma; se soportan solo 3 args.
+        raise ValueError("roifilt2 acepta máximo 3 argumentos (h, I, BW) o (I, BW, fun)")
+
+    # ---------------------------------------------------------
+    # Detección de sintaxis:
+    #   - roifilt2(h, I, BW)       → use_filter = True
+    #   - roifilt2(I, BW, fun)     → use_filter = False
+    # ---------------------------------------------------------
+    if isinstance(h_or_I, np.ndarray):
+        # Primer argumento es ndarray: puede ser h o puede ser I
+        if not isinstance(I_or_BW, np.ndarray):
+            raise TypeError("El segundo argumento debe ser ndarray (I o BW).")
+
+        if isinstance(BW_or_fun, np.ndarray):
+            # Sintaxis 1: roifilt2(h, I, BW)
+            h = np.asarray(h_or_I, dtype=float)
+            I = np.asarray(I_or_BW)
+            BW = np.asarray(BW_or_fun, dtype=bool)
+            use_filter = True
+        elif callable(BW_or_fun):
+            # Sintaxis 2: roifilt2(I, BW, fun)
+            I = np.asarray(h_or_I)
+            BW = np.asarray(I_or_BW, dtype=bool)
+            fun = BW_or_fun
+            use_filter = False
+        else:
+            raise TypeError("Tercer argumento debe ser ndarray (BW) o función callable.")
+    else:
+        raise TypeError("El primer argumento debe ser ndarray (h o I).")
+
+    # ---------------------------------------------------------
+    # Validaciones de forma
+    # ---------------------------------------------------------
+    if I.ndim != 2:
+        raise ValueError("I debe ser imagen 2D (escala de grises).")
+
+    if I.shape != BW.shape:
+        raise ValueError("I y BW deben tener el mismo tamaño.")
+
+    # ---------------------------------------------------------
+    # Procesamiento
+    # ---------------------------------------------------------
+    if use_filter:
+        # Sintaxis 1: filtro lineal en ROI
+        from ip_functions import imfilter  # import local para evitar ciclos
+
+        I_filtered = imfilter(I, h)
+
+        J = I.copy()
+        J[BW] = I_filtered[BW]
+
+    else:
+        # Sintaxis 2: función arbitraria en ROI
+        I_processed = fun(I)
+
+        if not isinstance(I_processed, np.ndarray):
+            I_processed = np.asarray(I_processed)
+
+        if I_processed.shape != I.shape:
+            raise ValueError("La función debe retornar array del mismo tamaño que I.")
+
+        J = I.copy()
+        J[BW] = I_processed[BW]
+
+    return J
+
