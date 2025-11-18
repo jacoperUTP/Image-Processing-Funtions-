@@ -13,7 +13,7 @@ from matplotlib.lines import Line2D
 
 
 # ====================================================================
-# 🖼️ Entrada / Salida
+#  Entrada / Salida
 # ====================================================================
 
 def imread(filename):
@@ -151,7 +151,7 @@ def imshow(I, *args):
 
 
 # ====================================================================
-# 🎨 Ajuste y Mejora de Intensidad
+#  Ajuste y Mejora de Intensidad
 # ====================================================================
 
 def mat2gray(I, limits=None):
@@ -306,15 +306,15 @@ def imadjust(I,E,S=(0,1),n=1):
     >>> # uso básico
     >>> out = imadjust(I, E, S, 1), n)
     """
-        Em=E[0]*255
-        EM=E[1]*255
-        Sm=S[0]*255
-        SM=S[1]*255
-        I=np.float16(I)
-        Is=((SM-Sm)/(EM-Em)**n)*(np.absolute(I-Em))**n+Sm
-        #Ajusta el overflow de los valores
-        Is[np.where(Is>255)] = 255
-        return np.uint8(Is)
+    Em=E[0]*255
+    EM=E[1]*255
+    Sm=S[0]*255
+    SM=S[1]*255
+    I=np.float16(I)
+    Is=((SM-Sm)/(EM-Em)**n)*(np.absolute(I-Em))**n+Sm
+    #Ajusta el overflow de los valores
+    Is[np.where(Is>255)] = 255
+    return np.uint8(Is)
         
         
   
@@ -341,29 +341,29 @@ def histeq(I, hR=None):
     >>> out = histeq(I, hR)
     """
         # Determinar el histograma de la imagen de entrada I
-        hI= imhist(I,None,False)
+    hI= imhist(I,None,False)
         
         # Calcula la CDF de la imagen de entrada I
-        cdfI = np.cumsum(hI) / np.sum(hI)
+    cdfI = np.cumsum(hI) / np.sum(hI)
         
-        if hR is None:
+    if hR is None:
         # Se realiza la ecualización normal
-            LUT = np.uint8(255 * cdfI)
-        else:
+        LUT = np.uint8(255 * cdfI)
+    else:
         # Se hace la especificación del histograma
         # Calcula la CDF de la imagen de referencia
-            cdfR = np.cumsum(hR) / np.sum(hR)
+        cdfR = np.cumsum(hR) / np.sum(hR)
             
         # Tabla de búsqueda (LUT) por proximidad
-            LUT = np.zeros(256, dtype=np.uint8)
-            for idx in range(256):
-                minIndex = np.argmin(np.abs(cdfR - cdfI[idx]))
-                LUT[idx] = minIndex  # Se indexa desde 0
+        LUT = np.zeros(256, dtype=np.uint8)
+        for idx in range(256):
+            minIndex = np.argmin(np.abs(cdfR - cdfI[idx]))
+            LUT[idx] = minIndex  # Se indexa desde 0
         
         # Aplica la LUT a toda la imagen de entrada usando indexación directa
-        S = LUT[I]
+    S = LUT[I]
         
-        return S
+    return S
   
     
     
@@ -401,7 +401,7 @@ def imcomplement(I):
 
 
 # ====================================================================
-# 🌈 Conversión de Espacios de Color
+#  Conversión de Espacios de Color
 # ====================================================================
 
 def imsplit(I):
@@ -472,38 +472,38 @@ def rgb2hsv(I):
     >>> # uso básico
     >>> out = rgb2hsv(I)
     """
-  I=I/255
-  r,g,b=imsplit(I)
-  [fil,col,pro]=np.shape(I)
-  Cmax=np.zeros((fil,col))
-  Cmin=np.zeros((fil,col))
-  d=np.zeros((fil,col))
-  H=np.zeros((fil,col))
-  S=np.zeros((fil,col))
-  V=np.zeros((fil,col))
-  for i in range(fil):
-    for j in range(col):
-      maximo=max([r[i,j],g[i,j],b[i,j]])
-      minimo=min([r[i,j],g[i,j],b[i,j]])
-      Cmax[i,j]=maximo
-      Cmin[i,j]=minimo
-      d[i,j]=maximo-minimo
-      if d[i,j]==0:
-        H[i,j]=0
-      elif maximo==r[i,j]:
-        H[i,j]=60*(((g[i,j]-b[i,j])/d[i,j])%6)
-      elif maximo==g[i,j]:
-        H[i,j]=60*(((g[i,j]-b[i,j])/d[i,j])+2)
-      elif maximo==b[i,j]:
-        H[i,j]=60*(((g[i,j]-b[i,j])/d[i,j])+4)
-      if maximo==0:
-        S[i,j]=0
-      else:
-        S[i,j]=d[i,j]/maximo
-      V[i,j]=maximo
-  H=H/360.0
-  hsv=np.dstack((H,S,V))
-  return hsv
+    I=I/255
+    r,g,b=imsplit(I)
+    [fil,col,pro]=np.shape(I)
+    Cmax=np.zeros((fil,col))
+    Cmin=np.zeros((fil,col))
+    d=np.zeros((fil,col))
+    H=np.zeros((fil,col))
+    S=np.zeros((fil,col))
+    V=np.zeros((fil,col))
+    for i in range(fil):
+        for j in range(col):
+            maximo=max([r[i,j],g[i,j],b[i,j]])
+            minimo=min([r[i,j],g[i,j],b[i,j]])
+            Cmax[i,j]=maximo
+            Cmin[i,j]=minimo
+            d[i,j]=maximo-minimo
+            if d[i,j]==0:
+                H[i,j]=0
+            elif maximo==r[i,j]:
+                H[i,j]=60*(((g[i,j]-b[i,j])/d[i,j])%6)
+            elif maximo==g[i,j]:
+                H[i,j]=60*(((g[i,j]-b[i,j])/d[i,j])+2)
+            elif maximo==b[i,j]:
+                H[i,j]=60*(((g[i,j]-b[i,j])/d[i,j])+4)
+            if maximo==0:
+                S[i,j]=0
+            else:
+                S[i,j]=d[i,j]/maximo
+            V[i,j]=maximo
+    H=H/360.0
+    hsv=np.dstack((H,S,V))
+    return hsv
 
 
 
@@ -528,36 +528,36 @@ def hsv2rgb(H):
     >>> # uso básico
     >>> out = hsv2rgb(H)
     """
-  h,s,v=imsplit(H)
-  N,M,L=np.shape(H)
-  X=np.zeros((N,M))
-  m=np.zeros((N,M))
-  r=np.zeros((N,M))
-  g=np.zeros((N,M))
-  b=np.zeros((N,M))
-  h=h*360
-  C=np.zeros((N,M)) #s*v
-  for i in range(N):
-    for j in range(M):
-      C[i,j]=v[i,j]*s[i,j]
-      X[i,j]=C[i,j]*(1-abs((h[i,j]/60)%2-1))
-      m[i,j]=v[i,j]-C[i,j]
-      if 0<=h[i,j] and h[i,j]<60:
-        r[i,j],g[i,j],b[i,j]=C[i,j],X[i,j],0
-      elif 60<=h[i,j] and h[i,j]<120:
-        r[i,j],g[i,j],b[i,j]=X[i,j],C[i,j],0
-      elif 120<=h[i,j] and h[i,j]<180:
-        r[i,j],g[i,j],b[i,j]=0,C[i,j],X[i,j]
-      elif 180<=h[i,j] and h[i,j]<240:
-        r[i,j],g[i,j],b[i,j]=0,X[i,j],C[i,j]
-      elif 240<=h[i,j] and h[i,j]<300:
-        r[i,j],g[i,j],b[i,j]=X[i,j],0,C[i,j]
-      elif 300<=h[i,j] and h[i,j]<360:
-        r[i,j],g[i,j],b[i,j]=C[i,j],0,X[i,j]
-  R,G,B=255*(r+m),255*(g+m),255*(b+m)
-  RGB=np.dstack((R,G,B))
-  RGB=np.uint8(RGB)
-  return RGB
+    h,s,v=imsplit(H)
+    N,M,L=np.shape(H)
+    X=np.zeros((N,M))
+    m=np.zeros((N,M))
+    r=np.zeros((N,M))
+    g=np.zeros((N,M))
+    b=np.zeros((N,M))
+    h=h*360
+    C=np.zeros((N,M)) #s*v
+    for i in range(N):
+      for j in range(M):
+        C[i,j]=v[i,j]*s[i,j]
+        X[i,j]=C[i,j]*(1-abs((h[i,j]/60)%2-1))
+        m[i,j]=v[i,j]-C[i,j]
+        if 0<=h[i,j] and h[i,j]<60:
+          r[i,j],g[i,j],b[i,j]=C[i,j],X[i,j],0
+        elif 60<=h[i,j] and h[i,j]<120:
+          r[i,j],g[i,j],b[i,j]=X[i,j],C[i,j],0
+        elif 120<=h[i,j] and h[i,j]<180:
+          r[i,j],g[i,j],b[i,j]=0,C[i,j],X[i,j]
+        elif 180<=h[i,j] and h[i,j]<240:
+          r[i,j],g[i,j],b[i,j]=0,X[i,j],C[i,j]
+        elif 240<=h[i,j] and h[i,j]<300:
+          r[i,j],g[i,j],b[i,j]=X[i,j],0,C[i,j]
+        elif 300<=h[i,j] and h[i,j]<360:
+          r[i,j],g[i,j],b[i,j]=C[i,j],0,X[i,j]
+    R,G,B=255*(r+m),255*(g+m),255*(b+m)
+    RGB=np.dstack((R,G,B))
+    RGB=np.uint8(RGB)
+    return RGB
   
   
 def rgb2lab(RGB):
@@ -845,7 +845,7 @@ def lab2xyz(lab):
 
 
 # ====================================================================
-# ✂️ Transformaciones Geométricas
+# ✂ Transformaciones Geométricas
 # ====================================================================
 
 def imcrop(I, x, y, w, h):
@@ -1337,7 +1337,7 @@ def imwarp(I, H):
 
 
 # ====================================================================
-# 🔍 Filtros Espaciales
+#  Filtros Espaciales
 # ====================================================================
 
 def imfilter(I, K, salida='same', tipodepad='symmetric', method='conv'):
@@ -2009,7 +2009,7 @@ def fspecial(tipo, T=None, S=None):
 
 
 # ====================================================================
-# 🔲 Morfología Matemática
+#  Morfología Matemática
 # ====================================================================
 
 def strel(shape, size, angle=0):
@@ -2258,7 +2258,7 @@ def imclose(Ibin, SE, pad=0):
 
 
 # ====================================================================
-# ✂️ Segmentación
+# ✂ Segmentación
 # ====================================================================
 
 def otsuthresh(h):
@@ -2780,7 +2780,7 @@ def edge(I, method='canny', thresh=None, sigma=None, direction='both', tsize=Non
 
 
 # ====================================================================
-# 🏷️ Análisis de Componentes Conectados
+# 🏷 Análisis de Componentes Conectados
 # ====================================================================
 
 def bwlabel(I, EE=4):
@@ -3128,7 +3128,7 @@ def regionprops(L, properties=None):
 
 
 # ====================================================================
-# 🔍 Transformada de Hough y Detección de Círculos/Líneas
+#  Transformada de Hough y Detección de Círculos/Líneas
 # ====================================================================
 
 def hough(BW, Theta=None, RhoResolution=1):
@@ -3391,24 +3391,7 @@ def houghlines(BW, theta, rho, picos, FillGap=20, MinLength=40):
     return lineas
     
     
-def imfindcircles(BW, radius_range, Method='PhaseCode', ObjectPolarity='bright', 
-    """
-    Detecta círculos en una imagen binaria.
-
-    Parámetros
-    ----------
-    (sin parámetros)
-
-    Retorna
-    -------
-    out : objeto
-        Resultado de imfindcircles.
-
-    Ejemplo
-    -------
-    >>> out = imfindcircles()
-    """
-                  Sensitivity=0.85, EdgeThreshold=None):
+def imfindcircles(BW, radius_range, Method='PhaseCode', ObjectPolarity='bright', Sensitivity=0.85, EdgeThreshold=None):
     """
     Encuentra círculos en IMAGEN BINARIA usando Transformada de Hough circular.
     Versión simplificada - SOLO NumPy, sin dependencias de scipy.
@@ -3568,24 +3551,7 @@ def imfindcircles(BW, radius_range, Method='PhaseCode', ObjectPolarity='bright',
     
     return centers[idx], radii[idx], metric[idx]
 #-------------------------------------------------------------
-def viscircles(centers, radii, ax=None, Color='blue', LineWidth=2, 
-    """
-    Dibuja círculos sobre una imagen.
-
-    Parámetros
-    ----------
-    (sin parámetros)
-
-    Retorna
-    -------
-    out : objeto
-        Resultado de viscircles.
-
-    Ejemplo
-    -------
-    >>> out = viscircles()
-    """
-               LineStyle='-', EnhanceVisibility=False):
+def viscircles(centers, radii, ax=None, Color='blue', LineWidth=2, LineStyle='-', EnhanceVisibility=False):
     """
     Dibuja círculos en ejes de Matplotlib.
     Compatible con MATLAB viscircles.
@@ -3670,7 +3636,7 @@ def viscircles(centers, radii, ax=None, Color='blue', LineWidth=2,
 
 
 # ====================================================================
-# 📊 Transformada de Fourier
+#  Transformada de Fourier
 # ====================================================================
 
 def fft(X, n: int | None = None, dim: int | None = None):
@@ -3882,7 +3848,7 @@ def ifftshift(X, axes=None):
 
 
 # ====================================================================
-# 🔧 Restauración y Métricas de Calidad
+#  Restauración y Métricas de Calidad
 # ====================================================================
 
 def deconvwnr(I, psf, nsr):
