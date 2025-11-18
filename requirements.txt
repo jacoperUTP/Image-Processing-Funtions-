@@ -1,0 +1,14 @@
+# IP Functions - Requisitos de Instalación
+# Para instalar: pip install -r requirements.txt
+
+# Dependencias principales
+numpy>=1.19.0
+matplotlib>=3.3.0
+
+# Dependencias opcionales para desarrollo
+# Instalar con: pip install -r requirements.txt[dev]
+
+# [dev]
+# pytest>=6.0
+# pillow>=8.0
+# scipy>=1.5.0

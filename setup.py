@@ -46,7 +46,7 @@ Incluye más de 60 funciones para manipulación, análisis y visualización de i
 
 ## Funciones Principales (v2.0.0)
 
-### 📷 Entrada/Salida
+### 🖼️ Entrada/Salida
 - `imread` - Leer imágenes desde disco
 - `imwrite` - Guardar imágenes
 - `imshow` - Visualizar imágenes (compatible con MATLAB)
@@ -106,7 +106,7 @@ Incluye más de 60 funciones para manipulación, análisis y visualización de i
   Eccentricity, Orientation, MajorAxisLength, MinorAxisLength, ConvexArea,
   ConvexHull, ConvexImage, Solidity, Extent, PixelIdxList, PixelList, etc.)
 
-### 📐 Transformada de Hough
+### 🔍 Transformada de Hough
 - `hough` - Transformada de Hough para líneas
 - `houghpeaks` - Detectar picos en espacio de Hough
 - `houghlines` - Detectar segmentos de línea
@@ -144,6 +144,14 @@ Incluye más de 60 funciones para manipulación, análisis y visualización de i
 ## Instalación
 
 ```bash
+pip install git+https://github.com/jacoperUTP/CV.git
+```
+
+O en modo editable para desarrollo:
+
+```bash
+git clone https://github.com/jacoperUTP/CV.git
+cd CV
 pip install -e .
 ```
 
@@ -187,20 +195,34 @@ imshow(rgb_labels)
 Esta librería replica la funcionalidad de las funciones de Image Processing
 Toolbox de MATLAB, permitiendo una transición fácil entre ambas plataformas.
 
+## Documentación
+
+Para documentación completa, ejemplos y guías:
+- [README principal](https://github.com/jacoperUTP/CV/blob/main/README.md)
+- [Guía de instalación](https://github.com/jacoperUTP/CV/blob/main/INSTALLATION.md)
+- [Guía de migración v1.0→v2.0](https://github.com/jacoperUTP/CV/blob/main/MIGRATION_GUIDE.md)
+- [Historial de cambios](https://github.com/jacoperUTP/CV/blob/main/CHANGELOG.md)
+
 ## Autor
 
-Universidad Tecnológica de Pereira
+**Universidad Tecnológica de Pereira**  
+Grupo de Investigación en Robótica Aplicada  
+Maestría en Instrumentación Física
+
 Contacto: jacoper@utp.edu.co
 
 ## Licencia
 
-MIT License
+MIT License - Ver [LICENSE](https://github.com/jacoperUTP/CV/blob/main/LICENSE)
 """,
     long_description_content_type="text/markdown",
-    url="https://github.com/tu-usuario/ip_functions",  # Actualizar con tu URL
+    url="https://github.com/jacoperUTP/CV",
     project_urls={
-        "Bug Reports": "https://github.com/tu-usuario/ip_functions/issues",
-        "Source": "https://github.com/tu-usuario/ip_functions",
-        "Documentation": "https://github.com/tu-usuario/ip_functions/wiki",
+        "Bug Reports": "https://github.com/jacoperUTP/CV/issues",
+        "Source": "https://github.com/jacoperUTP/CV",
+        "Documentation": "https://github.com/jacoperUTP/CV/blob/main/README.md",
+        "Installation Guide": "https://github.com/jacoperUTP/CV/blob/main/INSTALLATION.md",
+        "Migration Guide": "https://github.com/jacoperUTP/CV/blob/main/MIGRATION_GUIDE.md",
+        "Changelog": "https://github.com/jacoperUTP/CV/blob/main/CHANGELOG.md",
     },
 )
