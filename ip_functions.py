@@ -3,7 +3,7 @@
 
 
 
-__version__ = "2.1.0"          # Actualizar cada vez que publique cambios
+__version__ = "2.2.0"          # Actualizar cada vez que publique cambios
 __author__  = "Jacoper UTP"
 __date__    = "2026-01-03"     # Fecha de la última edición (opcional)
 
