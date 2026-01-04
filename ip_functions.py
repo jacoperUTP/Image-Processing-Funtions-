@@ -3,7 +3,7 @@
 
 
 
-__version__ = "2.2.0"          # Actualizar cada vez que publique cambios
+__version__ = "2.3.0"          # Actualizar cada vez que publique cambios
 __author__  = "Jacoper UTP"
 __date__    = "2026-01-03"     # Fecha de la última edición (opcional)
 
@@ -895,53 +895,48 @@ def imresize(I, S, method='bicubic', extrapval=0.0):
     """
     Redimensiona una imagen a un nuevo tamaño o escala.
 
-    Cambio clave: se arma una malla completa (Xp,Yp) y se interpola en una sola pasada.
+    Cambio clave: construir Xq,Yq como matrices y llamar interp2 UNA sola vez.
     """
     import numpy as np
 
-    # Leer tamaño de la imagen original
-    if len(I.shape) == 2:
-        N, M = I.shape
-        L = 1
+    # Tamaño original
+    if I.ndim == 2:
+        N, M = I.shape  # N=alto, M=ancho
     else:
-        N, M, L = I.shape
+        N, M, _ = I.shape
 
-    # Determinar los factores de escala
+    # Factores de escala
     if np.isscalar(S):
-        Sx = Sy = S
+        Sx = Sy = float(S)
     elif len(S) == 2:
         if isinstance(S[0], int) and isinstance(S[1], int):
+            # S=(nuevo_alto, nuevo_ancho)
             Sy = S[0] / N
             Sx = S[1] / M
         else:
-            Sx, Sy = S[0], S[1]
+            # S=(factor_x, factor_y)
+            Sx, Sy = float(S[0]), float(S[1])
     else:
         raise ValueError("S debe ser escalar o tupla de 2 elementos")
 
-    # Nuevo tamaño (misma lógica de su versión)
-    z = np.array([N, M, 1.0])
-    S_matrix = np.array([[Sx, 0, 0],
-                         [0, Sy, 0],
-                         [0, 0, 1]], dtype=float)
-    zp = S_matrix @ z
-    Np = int(np.ceil(zp[0]))
-    Mp = int(np.ceil(zp[1]))
+    # Nuevo tamaño (directo y consistente)
+    Np = int(np.ceil(N * Sy))  # nueva altura
+    Mp = int(np.ceil(M * Sx))  # nuevo ancho
 
-    # Malla de salida (una sola pasada)
+    # Malla de salida (0-based) y mapeo inverso (0-based)
     xp = np.arange(Mp, dtype=float)
     yp = np.arange(Np, dtype=float)
     Xp, Yp = np.meshgrid(xp, yp)  # (Np, Mp)
 
-    # Método inverso: (x,y) = (xp/Sx, yp/Sy) en 0-based flotante
     x = Xp / Sx
     y = Yp / Sy
 
-    # interp2 espera 1-based (MATLAB)
+    # interp2 usa 1-based (MATLAB)
     Xq = x + 1.0
     Yq = y + 1.0
 
-    Ip = interp2(I, Xq, Yq, method, extrapval)
-    return Ip.astype(I.dtype)
+    out = interp2(I, Xq, Yq, method, extrapval)
+    return out.astype(I.dtype)
 
 
 
@@ -949,53 +944,49 @@ def imrotate(I, grados, method='nearest', extrapval=0.0):
     """
     Rota una imagen un ángulo dado en grados.
 
-    Cambio clave: se arma una malla completa (Xp,Yp) y se interpola en una sola pasada.
+    Cambio clave: construir Xq,Yq como matrices y llamar interp2 UNA sola vez.
+    (Se evita R_inv @ tensor 3D para no tener errores de matmul.)
     """
     import numpy as np
 
     theta = -grados * np.pi / 180.0
+    c = np.cos(theta)
+    s = np.sin(theta)
 
-    if len(I.shape) == 2:
-        M, N = I.shape
-        C = 1
+    # Dimensiones de entrada
+    if I.ndim == 2:
+        M, N = I.shape  # M=alto, N=ancho
     else:
-        M, N, C = I.shape
+        M, N, _ = I.shape
 
-    pc = np.array([N, M, 1.0], dtype=float) / 2.0
+    # Centros (mismo criterio)
+    pcx, pcy = (N / 2.0), (M / 2.0)
 
-    R = np.array([
-        [np.cos(theta), -np.sin(theta), 0],
-        [np.sin(theta),  np.cos(theta), 0],
-        [0,              0,             1]
-    ], dtype=float)
+    # Tamaño de salida "loose"
+    Np = int(np.ceil(abs(c) * N + abs(s) * M))  # nuevo ancho
+    Mp = int(np.ceil(abs(s) * N + abs(c) * M))  # nueva altura
 
-    R_inv = np.linalg.inv(R)
+    pcx_p, pcy_p = (Np / 2.0), (Mp / 2.0)
 
-    # Tamaño de salida (misma lógica)
-    D = np.abs(R)
-    z = np.array([N, M, 1.0], dtype=float)
-    zp = D @ z
-    Np = int(np.ceil(zp[0]))
-    Mp = int(np.ceil(zp[1]))
-
-    pc_p = np.array([Np, Mp, 1.0], dtype=float) / 2.0
-
-    # Malla de salida
+    # Malla de salida (0-based)
     xp = np.arange(Np, dtype=float)
     yp = np.arange(Mp, dtype=float)
     Xp, Yp = np.meshgrid(xp, yp)  # (Mp, Np)
 
-    ones = np.ones_like(Xp)
-    Pp = np.stack([Xp, Yp, ones], axis=0)               # (3, Mp, Np)
-    Pp_rel = Pp - pc_p.reshape(3, 1, 1)                # centrar salida
-    P_rel = R_inv @ Pp_rel                             # aplicar inversa
-    P = P_rel + pc.reshape(3, 1, 1)                    # recentrar a entrada
+    # Relativas al centro de salida
+    xr = Xp - pcx_p
+    yr = Yp - pcy_p
 
-    Xq = P[0, :, :] + 1.0  # 1-based
-    Yq = P[1, :, :] + 1.0  # 1-based
+    # Mapeo inverso: R_inv = [[c, s], [-s, c]]
+    x = c * xr + s * yr + pcx
+    y = -s * xr + c * yr + pcy
 
-    I_rot = interp2(I, Xq, Yq, method, extrapval)
-    return I_rot.astype(I.dtype)
+    # interp2 usa 1-based (MATLAB)
+    Xq = x + 1.0
+    Yq = y + 1.0
+
+    out = interp2(I, Xq, Yq, method, extrapval)
+    return out.astype(I.dtype)
 
 
 
@@ -1003,51 +994,44 @@ def imtranslate(I, translation, mode='same', method='bilinear', extrapval=0.0):
     """
     Traslada una imagen por un vector de desplazamiento.
 
-    Cambio clave: se arma una malla completa (Xp,Yp) y se interpola en una sola pasada.
+    Cambio clave: construir Xq,Yq como matrices y llamar interp2 UNA sola vez.
     """
     import numpy as np
 
-    if len(I.shape) == 2:
+    if I.ndim == 2:
         N, M = I.shape
-        L = 1
     else:
-        N, M, L = I.shape
+        N, M, _ = I.shape
 
-    tx, ty = translation
+    tx, ty = float(translation[0]), float(translation[1])
 
-    T = np.array([
-        [1, 0, tx],
-        [0, 1, ty],
-        [0, 0, 1]
-    ], dtype=float)
-
-    if mode == 'full':
-        D = np.abs(T)
-        z = np.array([M, N, 1.0], dtype=float)
-        zp = D @ z
-        Mp = int(np.round(zp[0]))
-        Np = int(np.round(zp[1]))
-    elif mode == 'same':
+    if mode == 'same':
         Mp, Np = M, N
+        x_out0 = 0.0
+        y_out0 = 0.0
+    elif mode == 'full':
+        Mp = int(np.ceil(M + abs(tx)))
+        Np = int(np.ceil(N + abs(ty)))
+        x_out0 = 0.0
+        y_out0 = 0.0
     else:
         raise ValueError("El modo debe ser 'same' o 'full'")
 
-    # Malla de salida
-    xp = np.arange(Mp, dtype=float)
-    yp = np.arange(Np, dtype=float)
+    # Malla de salida (0-based)
+    xp = np.arange(Mp, dtype=float) + x_out0
+    yp = np.arange(Np, dtype=float) + y_out0
     Xp, Yp = np.meshgrid(xp, yp)  # (Np, Mp)
 
-    ones = np.ones_like(Xp)
-    Pp = np.stack([Xp, Yp, ones], axis=0)              # (3, Np, Mp)
+    # Mapeo inverso: entrada = salida - t
+    x = Xp - tx
+    y = Yp - ty
 
-    T_inv = np.linalg.inv(T)
-    P = T_inv @ Pp                                     # (3, Np, Mp)
+    # interp2 usa 1-based (MATLAB)
+    Xq = x + 1.0
+    Yq = y + 1.0
 
-    Xq = P[0, :, :] + 1.0  # 1-based
-    Yq = P[1, :, :] + 1.0  # 1-based
-
-    Ip = interp2(I, Xq, Yq, method, extrapval)
-    return Ip.astype(I.dtype)
+    out = interp2(I, Xq, Yq, method, extrapval)
+    return out.astype(I.dtype)
 
 
 def fitgeotrans(puntos_iniciales, puntos_finales, transformation_type='projective'):
@@ -1057,6 +1041,7 @@ def fitgeotrans(puntos_iniciales, puntos_finales, transformation_type='projectiv
     """
     import numpy as np
 
+    # Número de puntos
     n = puntos_iniciales.shape[0]
     
     if transformation_type == 'affine':
@@ -1094,6 +1079,7 @@ def fitgeotrans(puntos_iniciales, puntos_finales, transformation_type='projectiv
         H = np.array([[h[0], h[1], h[2]], 
                       [h[3], h[4], h[5]], 
                       [h[6], h[7], 1]])
+
     else:
         raise ValueError("Tipo de transformación no soportado. Use 'affine' o 'projective'.")
     
@@ -1106,16 +1092,18 @@ def imwarp(I, H, method='bilinear', extrapval=0.0):
     """
     Aplica una transformación geométrica homogénea a una imagen.
 
-    Cambio clave: se arma una malla completa (Xp,Yp) y se interpola en una sola pasada.
+    Cambio clave: construir Xq,Yq como matrices y llamar interp2 UNA sola vez.
+    (Se evita H_inv @ tensor 3D; se usa forma cerrada con den.)
     """
     import numpy as np
 
-    if len(I.shape) == 2:
+    # Dimensiones entrada
+    if I.ndim == 2:
         N, M = I.shape
-        L = 1
     else:
-        N, M, L = I.shape
+        N, M, _ = I.shape
 
+    # Esquinas en 1-based (como su versión original)
     corners = np.array([
         [1, 1, 1],
         [M, 1, 1],
@@ -1123,32 +1111,28 @@ def imwarp(I, H, method='bilinear', extrapval=0.0):
         [M, N, 1]
     ], dtype=float).T
 
-    transformed_corners = H @ corners
-    transformed_corners /= transformed_corners[2, :]
+    tc = H @ corners
+    tc /= tc[2, :]
 
-    x_min, y_min = np.min(transformed_corners[:2, :], axis=1)
-    x_max, y_max = np.max(transformed_corners[:2, :], axis=1)
+    x_min, y_min = np.min(tc[:2, :], axis=1)
+    x_max, y_max = np.max(tc[:2, :], axis=1)
 
     Np = int(np.ceil(y_max - y_min + 1))
     Mp = int(np.ceil(x_max - x_min + 1))
 
-    # Malla de salida (coordenadas 1-based coherentes con corners)
-    x_out = (np.arange(Mp, dtype=float) + x_min)  # 1-based
-    y_out = (np.arange(Np, dtype=float) + y_min)  # 1-based
-    Xp, Yp = np.meshgrid(x_out, y_out)            # (Np, Mp)
-
-    ones = np.ones_like(Xp)
-    Pp = np.stack([Xp, Yp, ones], axis=0)         # (3, Np, Mp)
+    # Malla de salida en coordenadas 1-based del plano destino
+    x_out = x_min + np.arange(Mp, dtype=float)
+    y_out = y_min + np.arange(Np, dtype=float)
+    Xp, Yp = np.meshgrid(x_out, y_out)  # (Np, Mp)
 
     H_inv = np.linalg.inv(H)
-    P = H_inv @ Pp                                 # (3, Np, Mp)
 
-    Xq = P[0, :, :] / P[2, :, :]                   # 1-based
-    Yq = P[1, :, :] / P[2, :, :]                   # 1-based
+    den = H_inv[2,0]*Xp + H_inv[2,1]*Yp + H_inv[2,2]
+    Xq  = (H_inv[0,0]*Xp + H_inv[0,1]*Yp + H_inv[0,2]) / den
+    Yq  = (H_inv[1,0]*Xp + H_inv[1,1]*Yp + H_inv[1,2]) / den
 
-    imagen_transformada = interp2(I, Xq, Yq, method, extrapval)
-    return imagen_transformada.astype(I.dtype)
-
+    out = interp2(I, Xq, Yq, method, extrapval)
+    return out.astype(I.dtype)
 
 
 # ====================================================================
