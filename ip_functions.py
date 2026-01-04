@@ -1,5 +1,24 @@
 #3/Nov/2026 8:32pm Colombia
 
+
+
+
+__version__ = "2.1.0"          # Actualizar cada vez que publique cambios
+__author__  = "Jacoper UTP"
+__date__    = "2026-01-03"     # Fecha de la última edición (opcional)
+
+def version():
+    """
+    Retorna metadatos básicos para verificar qué versión está cargada.
+    """
+    import inspect
+    return {
+        "module": __name__,
+        "version": __version__,
+        "file": inspect.getfile(inspect.currentframe())
+    }
+
+
 import numpy as np
 import random
 import matplotlib as mpl
