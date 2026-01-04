@@ -5263,7 +5263,9 @@ def roifilt2(h_or_I, I_or_BW, BW_or_fun, fun=None):
     return J
 
 
-------------------------------------------Interpolacion
+#-----------------------------------------------
+#     Interpolacion
+#-----------------------------------------------
 
 import numpy as np
 
