@@ -1,42 +1,63 @@
 # IP Functions - Librería de Procesamiento de Imágenes 🖼️
 
 [![Python Version](https://img.shields.io/badge/python-3.6%2B-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](https://github.com/jacoperUTP/CV/releases)
+[![Version](https://img.shields.io/badge/version-2.0.1-green.svg)](https://github.com/jacoperUTP/CV/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![MATLAB Compatible](https://img.shields.io/badge/MATLAB-compatible-orange.svg)](https://www.mathworks.com/products/image.html)
 
-**Librería completa de procesamiento de imágenes en Python, 100% compatible con MATLAB Image Processing Toolbox.**
+**Librería completa de procesamiento de imágenes en Python, compatible con MATLAB Image Processing Toolbox, priorizando claridad de implementación y funcionamiento sobre eficiencia extrema.**
 
-Desarrollada por la **Universidad Tecnológica de Pereira** para facilitar la transición de código MATLAB a Python manteniendo la misma sintaxis y funcionalidad.
+Desarrollada por la **Universidad Tecnológica de Pereira** para facilitar la transición de código MATLAB a Python manteniendo una sintaxis familiar, un flujo de trabajo equivalente y resultados consistentes en contextos educativos e investigativos.
 
 ---
 
 ## 🎯 Características Principales
 
 - **60+ funciones** de procesamiento de imágenes
-- **Sintaxis idéntica a MATLAB** - copia/pega tu código MATLAB y funciona
-- **Sin dependencias pesadas** - solo NumPy y Matplotlib
-- **Bien documentada** - cada función con docstrings detallados
-- **Educativa** - código claro y comprensible para aprendizaje
-- **v2.0 con correcciones críticas** - `bwlabel` y `regionprops` mejorados
+- **Sintaxis alineada con MATLAB** para migración rápida (flujo similar a copiar/pegar)
+- **Dependencias ligeras**: énfasis en **NumPy** y **Matplotlib**
+- **Bien documentada**: docstrings claros, ejemplos y validación de parámetros
+- **Educativa**: implementaciones legibles y trazables
+- **v2.0** con correcciones críticas: `bwlabel` y `regionprops` mejorados
+- **v2.0.1** con mejoras geométricas: `interp2` MATLAB-like y transformaciones “en una sola pasada”
+
+---
+
+## ⭐ Novedades en v2.0.1
+
+### 1) Interpolación 2D tipo MATLAB: `interp2`
+Se incorpora `interp2` con convención **1-based** (coordenadas estilo MATLAB) y métodos:
+
+- `nearest`
+- `linear` / `bilinear`
+- `cubic` / `bicubic`
+
+Incluye `extrapval` para definir el valor fuera de la imagen. Soporta imágenes 2D y 3D (interpolación canal a canal).
+
+### 2) Transformaciones geométricas sin bucles por píxel
+Las funciones geométricas pasan a un flujo estándar de mapeo inverso:
+
+1. Construcción de una malla de salida `(Xp, Yp)`
+2. Mapeo inverso a coordenadas de entrada `(Xq, Yq)`
+3. Evaluación con `interp2` sobre la malla completa
+
+Esto evita bloqueos en imágenes medianas/grandes cuando se emplea interpolación y mantiene claridad matemática.
+
+Funciones beneficiadas: `imrotate`, `imresize`, `imtranslate`, `imwarp`.
 
 ---
 
 ## 📦 Instalación
 
-### Desde GitHub (Recomendado para desarrollo)
+### Desde GitHub (recomendado para desarrollo)
 
-```bash
-git clone https://github.com/jacoperUTP/CV.git
-cd CV
-pip install -e .
-```
+    git clone https://github.com/jacoperUTP/CV.git
+    cd CV
+    pip install -e .
 
 ### Instalación directa
 
-```bash
-pip install git+https://github.com/jacoperUTP/CV.git
-```
+    pip install git+https://github.com/jacoperUTP/CV.git
 
 ### Requisitos
 
@@ -46,47 +67,72 @@ pip install git+https://github.com/jacoperUTP/CV.git
 
 ---
 
+## 🔄 Actualización recomendada (evitar caché)
+
+    pip uninstall ip_functions -y
+    pip install --no-cache-dir --upgrade --force-reinstall git+https://github.com/jacoperUTP/CV.git
+
+Verificación de la ruta del paquete (útil en Colab/Jupyter):
+
+    python -c "import ip_functions, inspect; print(inspect.getfile(ip_functions))"
+
+---
+
 ## 🚀 Uso Rápido
 
-```python
-from ip_functions import *
-import numpy as np
+    from ip_functions import *
+    import numpy as np
 
-# Leer y visualizar imagen
-I = imread('imagen.jpg')
-imshow(I, 'Imagen Original')
+    # Leer y visualizar imagen
+    I = imread('imagen.jpg')
+    imshow(I, 'Imagen Original')
 
-# Convertir a escala de grises
-gray = rgb2gray(I)
+    # Convertir a escala de grises
+    gray = rgb2gray(I)
 
-# Segmentación automática con Otsu
-umbral = graythresh(gray)
-bw = im2bw(gray, umbral)
+    # Segmentación automática con Otsu
+    umbral = graythresh(gray)
+    bw = im2bw(gray, umbral)
 
-# Operaciones morfológicas
-se = strel('disk', 5)
-bw_clean = imopen(bw, se)
+    # Operaciones morfológicas
+    se = strel('disk', 5)
+    bw_clean = imopen(bw, se)
 
-# Etiquetar componentes conectados (v2.0 CORREGIDO)
-labels, num_objects = bwlabel(bw_clean, EE=8)
-print(f"Objetos detectados: {num_objects}")
+    # Etiquetar componentes conectados (v2.0 CORREGIDO)
+    labels, num_objects = bwlabel(bw_clean, EE=8)
+    print(f"Objetos detectados: {num_objects}")
 
-# Analizar propiedades geométricas
-props = regionprops(labels, properties=[
-    'Area', 'Centroid', 'BoundingBox', 
-    'Perimeter', 'Eccentricity', 'Orientation'
-])
+    # Analizar propiedades geométricas
+    props = regionprops(labels, properties=[
+        'Area', 'Centroid', 'BoundingBox',
+        'Perimeter', 'Eccentricity', 'Orientation'
+    ])
 
-for i, p in enumerate(props, 1):
-    print(f"Objeto {i}:")
-    print(f"  Área: {p['Area']} píxeles")
-    print(f"  Centro: {p['Centroid']}")
-    print(f"  Perímetro: {p['Perimeter']:.2f}")
+    for i, p in enumerate(props, 1):
+        print(f"Objeto {i}:")
+        print(f"  Área: {p['Area']} píxeles")
+        print(f"  Centro: {p['Centroid']}")
+        print(f"  Perímetro: {p['Perimeter']:.2f}")
 
-# Visualizar resultados con colores
-rgb_labels = label2rgb(labels, 'jet', 'k', 'shuffle')
-imshow(rgb_labels, 'Objetos Etiquetados')
-```
+    # Visualizar resultados con colores
+    rgb_labels = label2rgb(labels, 'jet', 'k', 'shuffle')
+    imshow(rgb_labels, 'Objetos Etiquetados')
+
+---
+
+## ✂️ Ejemplo v2.0.1: rotación con interpolación bilinear
+
+    from ip_functions import *
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    RGB = imread('imagen.jpg')
+    Rotado = imrotate(RGB, 60, method='bilinear', extrapval=0.0)
+
+    plt.figure(1)
+    plt.imshow(Rotado.astype(np.uint8))
+    plt.axis('off')
+    plt.show()
 
 ---
 
@@ -94,7 +140,7 @@ imshow(rgb_labels, 'Objetos Etiquetados')
 
 ### 🖼️ Entrada/Salida
 - `imread` - Leer imágenes
-- `imwrite` - Guardar imágenes  
+- `imwrite` - Guardar imágenes
 - `imshow` - Visualizar imágenes (sintaxis MATLAB)
 
 ### 🎨 Ajuste y Mejora
@@ -112,11 +158,11 @@ imshow(rgb_labels, 'Objetos Etiquetados')
 - `xyz2lab`, `lab2xyz`
 
 ### ✂️ Transformaciones Geométricas
-- `imrotate` - Rotar imagen
-- `imresize` - Cambiar tamaño
+- `imrotate` - Rotar imagen (v2.0.1: interpolación y malla completa)
+- `imresize` - Cambiar tamaño (v2.0.1: interpolación y malla completa)
 - `imcrop` - Recortar región
-- `imtranslate` - Trasladar imagen
-- `imwarp` - Transformación con matriz homográfica
+- `imtranslate` - Trasladar imagen (v2.0.1: interpolación y malla completa)
+- `imwarp` - Transformación con matriz homográfica (v2.0.1: interpolación y malla completa)
 - `fitgeotrans` - Calcular transformación entre puntos
 
 ### 🔍 Filtros Espaciales
@@ -145,9 +191,9 @@ imshow(rgb_labels, 'Objetos Etiquetados')
 - `imgradient` - Gradiente de imagen
 
 ### 🏷️ Análisis de Componentes Conectados
-- **`bwlabel`** ⭐ - Etiquetar componentes (v2.0 CORREGIDO)
+- **`bwlabel`** - Etiquetar componentes (v2.0 CORREGIDO)
 - `label2rgb` - Visualizar etiquetas en pseudocolor
-- **`regionprops`** ⭐ - Propiedades geométricas completas
+- **`regionprops`** - Propiedades geométricas completas
 
 ### 🔍 Transformada de Hough
 - `hough` - Transformada de Hough para líneas
@@ -172,221 +218,62 @@ imshow(rgb_labels, 'Objetos Etiquetados')
 
 ---
 
-## ⭐ Novedades en v2.0.0
+## ⭐ Novedades en v2.0.0 (referencia)
 
 ### ✅ `bwlabel` CORREGIDO
+La versión 2.0 corrige un bug crítico en `bwlabel` que causaba fragmentación incorrecta de objetos conectados.
 
-La versión 2.0 corrige un **bug crítico** en `bwlabel` que causaba fragmentación incorrecta de objetos conectados.
+Problema típico en v1.0 (fragmentación):
+    import numpy as np
+    from ip_functions import bwlabel
 
-**Problema en v1.0:**
-```python
-# Objeto en forma de L se fragmentaba en 2 componentes
-test = np.array([
-    [0, 1, 1, 0],
-    [0, 1, 0, 0],
-    [0, 1, 1, 1]
-], dtype=bool)
+    test = np.array([
+        [0, 1, 1, 0],
+        [0, 1, 0, 0],
+        [0, 1, 1, 1]
+    ], dtype=bool)
 
-labels, num = bwlabel(test, EE=4)  # v1.0 retornaba num=2 ❌
-```
-
-**Solución en v2.0:**
-- Implementación robusta con **algoritmo Union-Find**
-- Unión correcta de componentes durante escaneo
-- Resultado: `num=1` (correcto) ✅
+    labels, num = bwlabel(test, EE=4)
 
 ### ✅ `regionprops` MEJORADO
-
-Nuevas propiedades geométricas disponibles:
-
-```python
-props = regionprops(labels, properties=[
-    'Area',              # Área en píxeles
-    'Centroid',          # Centro de masa (y, x)
-    'BoundingBox',       # Caja delimitadora
-    'Perimeter',         # ⭐ Perímetro (chain code)
-    'Eccentricity',      # ⭐ Excentricidad [0,1]
-    'Orientation',       # ⭐ Orientación en grados
-    'MajorAxisLength',   # ⭐ Eje mayor
-    'MinorAxisLength',   # ⭐ Eje menor
-    'ConvexArea',        # ⭐ Área de envolvente convexa
-    'ConvexHull',        # ⭐ Puntos de envolvente
-    'Solidity',          # ⭐ Solidez (Area/ConvexArea)
-])
-```
-
----
-
-## 📖 Ejemplos de Uso
-
-### Ejemplo 1: Detección y Conteo de Objetos
-
-```python
-from ip_functions import *
-
-# Leer imagen
-I = imread('monedas.jpg')
-gray = rgb2gray(I)
-
-# Segmentación
-bw = imbinarize(gray, 'otsu')
-
-# Limpieza morfológica
-se = strel('disk', 3)
-bw = imopen(bw, se)
-bw = imclose(bw, se)
-
-# Etiquetar y contar
-labels, num_monedas = bwlabel(bw, EE=8)
-print(f"Monedas detectadas: {num_monedas}")
-
-# Analizar cada moneda
-props = regionprops(labels, properties=['Area', 'Centroid', 'Perimeter'])
-
-for i, p in enumerate(props, 1):
-    print(f"Moneda {i}: Área={p['Area']}, Perímetro={p['Perimeter']:.1f}")
-    
-# Visualizar
-rgb_labels = label2rgb(labels, 'jet', 'k', 'shuffle')
-imshow(rgb_labels, 'Monedas Etiquetadas')
-```
-
-### Ejemplo 2: Detección de Líneas con Hough
-
-```python
-from ip_functions import *
-
-# Leer y detectar bordes
-I = imread('edificio.jpg')
-gray = rgb2gray(I)
-edges = edge(gray, 'canny')
-
-# Transformada de Hough
-H, theta, rho = hough(edges)
-
-# Detectar picos
-peaks = houghpeaks(H, 5)  # Top 5 líneas
-
-# Extraer líneas
-lines = houghlines(edges, theta, rho, peaks)
-
-# Visualizar
-imshow(I)
-for line in lines:
-    x1, y1 = line['point1']
-    x2, y2 = line['point2']
-    plt.plot([x1, x2], [y1, y2], 'r-', linewidth=2)
-plt.title(f'{len(lines)} líneas detectadas')
-plt.show()
-```
-
-### Ejemplo 3: Análisis Morfológico
-
-```python
-from ip_functions import *
-
-# Imagen binaria de texto
-I = imread('texto.png')
-bw = imbinarize(I, 'otsu')
-
-# Diferentes elementos estructurantes
-se_line = strel('line', 15, 0)    # Línea horizontal
-se_disk = strel('disk', 3)         # Disco
-
-# Operaciones morfológicas
-dilated = imdilate(bw, se_line)    # Conectar caracteres
-eroded = imerode(bw, se_disk)      # Adelgazar
-opened = imopen(bw, se_disk)       # Eliminar ruido
-closed = imclose(bw, se_disk)      # Cerrar huecos
-
-# Comparar resultados
-fig, axes = plt.subplots(2, 3, figsize=(12, 8))
-axes[0, 0].imshow(bw, cmap='gray')
-axes[0, 0].set_title('Original')
-axes[0, 1].imshow(dilated, cmap='gray')
-axes[0, 1].set_title('Dilatación')
-axes[0, 2].imshow(eroded, cmap='gray')
-axes[0, 2].set_title('Erosión')
-axes[1, 0].imshow(opened, cmap='gray')
-axes[1, 0].set_title('Apertura')
-axes[1, 1].imshow(closed, cmap='gray')
-axes[1, 1].set_title('Cierre')
-plt.tight_layout()
-plt.show()
-```
-
----
-
-## 🔄 Migración desde v1.0
-
-Si ya tienes `ip_functions` v1.0 instalado, consulta la [**Guía de Migración**](MIGRATION_GUIDE.md) para actualizar a v2.0 sin problemas.
-
-**Resumen rápido:**
-
-```bash
-# 1. Desinstalar versión anterior
-pip uninstall ip_functions -y
-
-# 2. Instalar v2.0
-cd ruta/al/repositorio/CV
-pip install -e .
-
-# 3. Verificar instalación
-python -c "from ip_functions import bwlabel; print('✅ v2.0 instalada')"
-```
-
----
-
-## 📋 Compatibilidad MATLAB
-
-Esta librería replica fielmente la funcionalidad de MATLAB Image Processing Toolbox:
-
-| MATLAB | IP Functions | Estado |
-|--------|--------------|--------|
-| `imread('img.jpg')` | `imread('img.jpg')` | ✅ Idéntico |
-| `imshow(I)` | `imshow(I)` | ✅ Idéntico |
-| `bwlabel(BW, 8)` | `bwlabel(BW, EE=8)` | ✅ Compatible |
-| `regionprops(L, 'all')` | `regionprops(L, properties='all')` | ✅ Compatible |
-| `strel('disk', 5)` | `strel('disk', 5)` | ✅ Idéntico |
-| `fft2(I)` | `fft2(I)` | ✅ Idéntico |
+Ejemplo de propiedades ampliadas:
+    props = regionprops(labels, properties=[
+        'Area', 'Centroid', 'BoundingBox',
+        'Perimeter', 'Eccentricity', 'Orientation',
+        'MajorAxisLength', 'MinorAxisLength',
+        'ConvexArea', 'ConvexHull', 'Solidity',
+    ])
 
 ---
 
 ## 🧪 Testing
 
-```python
-# Test básico de bwlabel v2.0
-import numpy as np
-from ip_functions import bwlabel
+    import numpy as np
+    from ip_functions import bwlabel
 
-# Objeto en forma de L
-test = np.array([
-    [0, 1, 1, 0, 0],
-    [0, 1, 0, 0, 0],
-    [0, 1, 1, 1, 0],
-    [0, 0, 0, 1, 0],
-    [0, 0, 0, 1, 1]
-], dtype=bool)
+    test = np.array([
+        [0, 1, 1, 0, 0],
+        [0, 1, 0, 0, 0],
+        [0, 1, 1, 1, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 1, 1]
+    ], dtype=bool)
 
-labels, num = bwlabel(test, EE=4)
-print(f"Componentes: {num}")  # Debe ser 1 en v2.0 ✅
-
-assert num == 1, "bwlabel no está funcionando correctamente"
-print("✅ Test pasado - bwlabel v2.0 funciona correctamente")
-```
+    labels, num = bwlabel(test, EE=4)
+    print(f"Componentes: {num}")
+    assert num == 1, "bwlabel no está funcionando correctamente"
+    print("Test pasado: bwlabel funciona correctamente")
 
 ---
 
 ## 🤝 Contribuciones
 
-Las contribuciones son bienvenidas! Si encuentras un bug o tienes una sugerencia:
-
-1. Abre un [Issue](https://github.com/jacoperUTP/CV/issues)
-2. Haz un Fork del repositorio
-3. Crea una rama: `git checkout -b feature/nueva-funcionalidad`
+1. Abrir un Issue: https://github.com/jacoperUTP/CV/issues
+2. Fork del repositorio
+3. Crear rama: `git checkout -b feature/nueva-funcionalidad`
 4. Commit: `git commit -am 'Agregar nueva funcionalidad'`
 5. Push: `git push origin feature/nueva-funcionalidad`
-6. Abre un Pull Request
+6. Abrir Pull Request
 
 ---
 
@@ -402,28 +289,19 @@ Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) par
 Grupo de Investigación en Robótica Aplicada  
 Programa de Maestría en Instrumentación Física
 
-**Contacto:**  
-📧 jacoper@utp.edu.co  
-🌐 [GitHub](https://github.com/jacoperUTP)  
-🏛️ [Universidad Tecnológica de Pereira](https://www.utp.edu.co)
+Contacto:  
+- jacoper@utp.edu.co  
+- GitHub: https://github.com/jacoperUTP  
+- Universidad: https://www.utp.edu.co
 
 ---
 
-## 📚 Recursos Adicionales
+## 📚 Recursos
 
-- [📖 Guía de Instalación Detallada](INSTALLATION.md)
-- [🔄 Guía de Migración v1.0 → v2.0](MIGRATION_GUIDE.md)
-- [📝 Historial de Cambios](CHANGELOG.md)
-- [🐛 Reportar Bugs](https://github.com/jacoperUTP/CV/issues)
+- Releases: https://github.com/jacoperUTP/CV/releases
+- Issues: https://github.com/jacoperUTP/CV/issues
 
 ---
 
-## 🌟 Agradecimientos
+Última actualización: Enero 2026 - Versión 2.0.1
 
-Desarrollado con fines educativos para facilitar la enseñanza de procesamiento de imágenes y visión por computador en la Universidad Tecnológica de Pereira.
-
-**Si este proyecto te es útil, considera darle una ⭐ en GitHub!**
-
----
-
-*Última actualización: Noviembre 2025 - Versión 2.0.0*
