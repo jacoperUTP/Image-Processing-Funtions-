@@ -1,4 +1,4 @@
-#4/enero/2026 1:26pm Colombia
+#4/enero/2026 1:58pm Colombia
 
 
 __version__ = "2.0.1"          # Actualizar
