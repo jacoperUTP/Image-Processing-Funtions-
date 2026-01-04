@@ -1,4 +1,4 @@
-#18/Nov/2025 2:27am Colombia
+#3/Nov/2026 8:32pm Colombia
 
 import numpy as np
 import random
@@ -846,7 +846,7 @@ def lab2xyz(lab):
 
 
 # ====================================================================
-# ✂ Transformaciones Geométricas
+# Transformaciones Geométricas
 # ====================================================================
 
 def imcrop(I, x, y, w, h):
@@ -894,7 +894,7 @@ def imcrop(I, x, y, w, h):
 
 
 
-def imresize(I, S):
+def imresize(I, S, method='bicubic', extrapval=0.0):
     """
     Redimensiona una imagen a un nuevo tamaño o escala.
 
@@ -904,6 +904,11 @@ def imresize(I, S):
         Parámetro I.
     S : objeto
         Parámetro S.
+    method : str, opcional
+        Método de interpolación tipo MATLAB: 'nearest', 'bilinear', 'bicubic'
+        (también se aceptan 'linear' y 'cubic').
+    extrapval : float, opcional
+        Valor fuera de la imagen.
 
     Retorna
     -------
@@ -913,8 +918,10 @@ def imresize(I, S):
     Ejemplo
     -------
     >>> # uso básico
-    >>> out = imresize(I, S)
+    >>> out = imresize(I, S, method='bilinear')
     """
+    import numpy as np
+
     # Leer tamaño de la imagen original
     if len(I.shape) == 2:
         # Imagen en escala de grises
@@ -947,49 +954,45 @@ def imresize(I, S):
     ])
     
     # Calcular el nuevo tamaño de la imagen
-    z = np.array([N, M, 1])  # Dimensiones originales en formato homogéneo
-    zp = np.dot(S_matrix, z)  # Nuevas dimensiones
-    Np = int(np.ceil(zp[0]))  # Nueva altura
-    Mp = int(np.ceil(zp[1]))  # Nuevo ancho
+    z = np.array([N, M, 1])        # (alto, ancho, 1)
+    zp = np.dot(S_matrix, z)       # Nuevas dimensiones
+    Np = int(np.ceil(zp[0]))       # Nueva altura
+    Mp = int(np.ceil(zp[1]))       # Nuevo ancho
     
     # Crear la nueva imagen de salida
     if L == 1:
-        Ip = np.zeros((Np, Mp), dtype=I.dtype)
+        Ip = np.zeros((Np, Mp), dtype=float)
     else:
-        Ip = np.zeros((Np, Mp, L), dtype=I.dtype)
-    
-    # Método Inverso
+        Ip = np.zeros((Np, Mp, L), dtype=float)
+
+    # Método inverso: para cada píxel de salida, buscar coordenada en la entrada
+    # p = S_inv * pp  con pp = [xp, yp, 1] (0-based)
+    S_inv = np.array([
+        [1/Sx, 0, 0],
+        [0, 1/Sy, 0],
+        [0, 0, 1]
+    ])
+
     for yp in range(Np):
         for xp in range(Mp):
-            # Coordenadas homogéneas del píxel en la imagen escalada
-            pp = np.array([xp, yp, 1])
-            
-            # Calcular la posición en la imagen original
-            S_inv = np.array([
-                [1/Sx, 0, 0],
-                [0, 1/Sy, 0],
-                [0, 0, 1]
-            ])  # Matriz inversa de escalamiento
-            
-            p = np.dot(S_inv, pp)  # Coordenadas originales
-            
-            # Redondear las coordenadas al píxel más cercano
-            x = int(np.round(p[0]))
-            y = int(np.round(p[1]))
-            
-            # Verificar si las coordenadas están dentro de los límites de la imagen original
-            if 0 <= x < M and 0 <= y < N:
-                # Asignar los valores de los píxeles de la imagen original a la imagen escalada
-                if L == 1:
-                    Ip[yp, xp] = I[y, x]
-                else:
-                    Ip[yp, xp, :] = I[y, x, :]
-    
-    return Ip
+            pp = np.array([xp, yp, 1.0])
+            p = np.dot(S_inv, pp)  # coordenadas en imagen original (0-based, flotantes)
+
+            # interp2 tipo MATLAB usa 1-based, por eso se suma 1
+            Xq = p[0] + 1.0
+            Yq = p[1] + 1.0
+
+            if L == 1:
+                Ip[yp, xp] = interp2(I, Xq, Yq, method, extrapval)
+            else:
+                val = interp2(I, Xq, Yq, method, extrapval)
+                Ip[yp, xp, :] = val
+
+    return Ip.astype(I.dtype)
 
 
 
-def imrotate(I, grados):
+def imrotate(I, grados, method='nearest', extrapval=0.0):
     """
     Rota una imagen un ángulo dado en grados.
 
@@ -999,6 +1002,11 @@ def imrotate(I, grados):
         Parámetro I.
     grados : objeto
         Parámetro grados.
+    method : str, opcional
+        Método de interpolación tipo MATLAB: 'nearest', 'bilinear', 'bicubic'
+        (también se aceptan 'linear' y 'cubic').
+    extrapval : float, opcional
+        Valor fuera de la imagen.
 
     Retorna
     -------
@@ -1008,83 +1016,72 @@ def imrotate(I, grados):
     Ejemplo
     -------
     >>> # uso básico
-    >>> out = imrotate(I, grados)
+    >>> out = imrotate(I, grados, method='bilinear')
     """
-    # Convertir los grados a radianes
+    import numpy as np
+
+    # Convertir los grados a radianes (signo mantenido como en su versión)
     theta = -grados * np.pi / 180
 
     # Obtener las dimensiones de la imagen original
     if len(I.shape) == 2:
-        # Imagen en escala de grises
         M, N = I.shape
         C = 1
     else:
-        # Imagen RGB
         M, N, C = I.shape
 
-    # Centro de la imagen original
-    pc = np.array([N, M, 1]) / 2
+    # Centro de la imagen original (mantenido)
+    pc = np.array([N, M, 1], dtype=float) / 2.0
 
     # Matriz de rotación inversa
     R = np.array([
         [np.cos(theta), -np.sin(theta), 0],
         [np.sin(theta),  np.cos(theta), 0],
         [0,              0,             1]
-    ])
+    ], dtype=float)
     
     R_inv = np.linalg.inv(R)
 
-    # Calcular las nuevas dimensiones de la imagen rotada
+    # Calcular las nuevas dimensiones (mantenido)
     D = np.abs(R)
-    z = np.array([N, M, 1])
-    zp = np.dot(D, z)  # Nuevas dimensiones sin el término homogéneo
+    z = np.array([N, M, 1], dtype=float)
+    zp = np.dot(D, z)
 
-    # Dimensiones de la imagen rotada
-    Np = int(np.ceil(zp[0]))  # Nueva anchura
-    Mp = int(np.ceil(zp[1]))  # Nueva altura
+    Np = int(np.ceil(zp[0]))
+    Mp = int(np.ceil(zp[1]))
 
     # Centro de la imagen rotada
-    pc_p = np.array([Np, Mp, 1]) / 2
+    pc_p = np.array([Np, Mp, 1], dtype=float) / 2.0
 
     # Inicializar la nueva imagen rotada
     if C == 1:
-        I_rotada = np.zeros((Mp, Np), dtype=I.dtype)
+        I_rotada = np.zeros((Mp, Np), dtype=float)
     else:
-        I_rotada = np.zeros((Mp, Np, C), dtype=I.dtype)
+        I_rotada = np.zeros((Mp, Np, C), dtype=float)
 
-    # Ciclos for para recorrer la imagen rotada
     for xp in range(Np):
         for yp in range(Mp):
 
-            # Coordenadas homogéneas del píxel en la imagen rotada
-            p_p = np.array([xp, yp, 1])
-
-            # Calcular la posición relativa respecto al centro de la imagen rotada
+            p_p = np.array([xp, yp, 1.0])
             p_p_rel = p_p - pc_p
-
-            # Aplicar la matriz de rotación inversa a las coordenadas relativas
             p_rel = np.dot(R_inv, p_p_rel)
+            p = p_rel + pc  # coordenadas en la imagen original (0-based, flotantes)
 
-            # Ajustar las coordenadas al centro de la imagen original
-            p = p_rel + pc
+            # interp2 tipo MATLAB usa 1-based
+            Xq = p[0] + 1.0
+            Yq = p[1] + 1.0
 
-            # Redondear las coordenadas al píxel más cercano
-            x = int(np.round(p[0]))
-            y = int(np.round(p[1]))
+            if C == 1:
+                I_rotada[yp, xp] = interp2(I, Xq, Yq, method, extrapval)
+            else:
+                val = interp2(I, Xq, Yq, method, extrapval)
+                I_rotada[yp, xp, :] = val
 
-            # Verificar si las coordenadas están dentro de los límites de la imagen original
-            if 0 <= x < N and 0 <= y < M:
-                # Asignar los valores de los píxeles de la imagen original a la imagen rotada
-                if C == 1:
-                    I_rotada[yp, xp] = I[y, x]
-                else:
-                    I_rotada[yp, xp, :] = I[y, x, :]
-
-    return I_rotada
+    return I_rotada.astype(I.dtype)
 
 
 
-def imtranslate(I, translation, mode='same'):
+def imtranslate(I, translation, mode='same', method='bilinear', extrapval=0.0):
     """
     Traslada una imagen por un vector de desplazamiento.
 
@@ -1096,6 +1093,11 @@ def imtranslate(I, translation, mode='same'):
         Parámetro translation.
     mode : objeto
         Parámetro mode.
+    method : str, opcional
+        Método de interpolación tipo MATLAB: 'nearest', 'bilinear', 'bicubic'
+        (también se aceptan 'linear' y 'cubic').
+    extrapval : float, opcional
+        Valor fuera de la imagen.
 
     Retorna
     -------
@@ -1105,65 +1107,58 @@ def imtranslate(I, translation, mode='same'):
     Ejemplo
     -------
     >>> # uso básico
-    >>> out = imtranslate(I, translation, mode)
+    >>> out = imtranslate(I, translation, mode='same', method='nearest')
     """
+    import numpy as np
+
     # Obtiene las dimensiones de la imagen original
     if len(I.shape) == 2:
-        # Imagen en escala de grises
         N, M = I.shape
         L = 1
     else:
-        # Imagen RGB
         N, M, L = I.shape
     
-    # Desplazamientos en x e y
     tx, ty = translation
     
-    # Matriz de translación
     T = np.array([
         [1, 0, tx],
         [0, 1, ty],
         [0, 0, 1]
-    ])
-    
-    # Si el modo es 'full', se considera el tamaño extendido
+    ], dtype=float)
+
     if mode == 'full':
-        # Cálculo de nuevas dimensiones considerando el desplazamiento
         D = np.abs(T)
-        z = np.array([M, N, 1])
-        zp = np.dot(D, z)  # Nuevas dimensiones
-        Mp = int(np.round(zp[0]))  # Nuevo ancho
-        Np = int(np.round(zp[1]))  # Nueva altura
+        z = np.array([M, N, 1], dtype=float)
+        zp = np.dot(D, z)
+        Mp = int(np.round(zp[0]))
+        Np = int(np.round(zp[1]))
     elif mode == 'same':
-        Mp, Np = M, N  # Mantiene las mismas dimensiones que la imagen original
+        Mp, Np = M, N
     else:
         raise ValueError("El modo debe ser 'same' o 'full'")
 
-    # Inicializa la nueva imagen con ceros
     if L == 1:
-        Ip = np.zeros((Np, Mp), dtype=I.dtype)
+        Ip = np.zeros((Np, Mp), dtype=float)
     else:
-        Ip = np.zeros((Np, Mp, L), dtype=I.dtype)
+        Ip = np.zeros((Np, Mp, L), dtype=float)
 
-    # Recorrer cada píxel de la nueva imagen
+    T_inv = np.linalg.inv(T)
+
     for yp in range(Np):
         for xp in range(Mp):
-            # Calcula las coordenadas en la imagen original aplicando la inversa de T
-            pp = np.array([xp, yp, 1])
-            p = np.dot(np.linalg.inv(T), pp)
-            
-            x = int(np.round(p[0]))
-            y = int(np.round(p[1]))
+            pp = np.array([xp, yp, 1.0])
+            p = np.dot(T_inv, pp)  # coordenadas en la imagen original (0-based, flotantes)
 
-            # Verifica si las coordenadas están dentro de los límites de la imagen original
-            if 0 <= x < M and 0 <= y < N:
-                if L == 1:
-                    Ip[yp, xp] = I[y, x]
-                else:
-                    Ip[yp, xp, :] = I[y, x, :]
+            Xq = p[0] + 1.0
+            Yq = p[1] + 1.0
 
-    # Convierte la imagen resultante a tipo uint8 (si es necesario)
-    return Ip
+            if L == 1:
+                Ip[yp, xp] = interp2(I, Xq, Yq, method, extrapval)
+            else:
+                val = interp2(I, Xq, Yq, method, extrapval)
+                Ip[yp, xp, :] = val
+
+    return Ip.astype(I.dtype)
 
 
 def fitgeotrans(puntos_iniciales, puntos_finales, transformation_type='projective'):
@@ -1189,6 +1184,8 @@ def fitgeotrans(puntos_iniciales, puntos_finales, transformation_type='projectiv
     >>> # uso básico
     >>> out = fitgeotrans(puntos_iniciales, puntos_finales, transformation_type)
     """
+    import numpy as np
+
     # Número de puntos
     n = puntos_iniciales.shape[0]
     
@@ -1252,7 +1249,7 @@ def fitgeotrans(puntos_iniciales, puntos_finales, transformation_type='projectiv
 
 
 
-def imwarp(I, H):
+def imwarp(I, H, method='bilinear', extrapval=0.0):
     """
     Aplica una transformación geométrica homogénea a una imagen.
 
@@ -1262,6 +1259,11 @@ def imwarp(I, H):
         Parámetro I.
     H : ndarray
         Parámetro H.
+    method : str, opcional
+        Método de interpolación tipo MATLAB: 'nearest', 'bilinear', 'bicubic'
+        (también se aceptan 'linear' y 'cubic').
+    extrapval : float, opcional
+        Valor fuera de la imagen.
 
     Retorna
     -------
@@ -1271,15 +1273,15 @@ def imwarp(I, H):
     Ejemplo
     -------
     >>> # uso básico
-    >>> out = imwarp(I, H)
+    >>> out = imwarp(I, H, method='nearest')
     """
+    import numpy as np
+
     # Obtener las dimensiones de la imagen
     if len(I.shape) == 2:
-        # Imagen en escala de grises
         N, M = I.shape
         L = 1
     else:
-        # Imagen RGB
         N, M, L = I.shape
 
     # Esquinas de la imagen original (en coordenadas homogéneas)
@@ -1288,49 +1290,45 @@ def imwarp(I, H):
         [M, 1, 1],
         [1, N, 1],
         [M, N, 1]
-    ]).T  # Transpuesta para facilitar operaciones matriciales
+    ]).T
 
-    # Transformar las esquinas de la imagen
     transformed_corners = H @ corners
-    transformed_corners /= transformed_corners[2, :]  # Normalizar
+    transformed_corners /= transformed_corners[2, :]
 
-    # Calcular los límites de la nueva imagen
     x_min, y_min = np.min(transformed_corners[:2, :], axis=1)
     x_max, y_max = np.max(transformed_corners[:2, :], axis=1)
 
-    # Calcular el nuevo tamaño de la imagen transformada
     Np = int(np.ceil(y_max - y_min + 1))
     Mp = int(np.ceil(x_max - x_min + 1))
 
-    # Crear una imagen vacía para almacenar la imagen transformada
     if L == 1:
-        imagen_transformada = np.zeros((Np, Mp), dtype=I.dtype)
+        imagen_transformada = np.zeros((Np, Mp), dtype=float)
     else:
-        imagen_transformada = np.zeros((Np, Mp, L), dtype=I.dtype)
+        imagen_transformada = np.zeros((Np, Mp, L), dtype=float)
 
-    # Calcular la matriz de transformación inversa
     H_inv = np.linalg.inv(H)
 
-    # Recorrer la imagen transformada píxel por píxel
     for yp in range(Np):
         for xp in range(Mp):
-            # Coordenadas ajustadas (en coordenadas homogéneas)
-            p_p = np.array([xp + x_min - 1, yp + y_min - 1, 1])
+            # Coordenadas ajustadas (manteniendo su formulación)
+            p_p = np.array([xp + x_min - 1, yp + y_min - 1, 1.0])
 
-            # Aplicar la transformación inversa
             p = H_inv @ p_p
-            x_o = int(round(p[0] / p[2]))
-            y_o = int(round(p[1] / p[2]))
+            x0 = p[0] / p[2]   # 1-based (coherente con corners)
+            y0 = p[1] / p[2]   # 1-based
 
-            # Verificar si las coordenadas están dentro de los límites de la imagen original
-            if 1 <= x_o <= M and 1 <= y_o <= N:
-                if L == 1:
-                    imagen_transformada[yp, xp] = I[y_o - 1, x_o - 1]  # Ajustar a 0-indexed
-                else:
-                    for c in range(L):  # Recorrer cada canal
-                        imagen_transformada[yp, xp, c] = I[y_o - 1, x_o - 1, c]  # Ajustar a 0-indexed
+            # interp2 usa 1-based, por eso aquí NO se suma 1
+            Xq = x0
+            Yq = y0
 
-    return imagen_transformada    
+            if L == 1:
+                imagen_transformada[yp, xp] = interp2(I, Xq, Yq, method, extrapval)
+            else:
+                val = interp2(I, Xq, Yq, method, extrapval)
+                imagen_transformada[yp, xp, :] = val
+
+    return imagen_transformada.astype(I.dtype)
+
     
 
 
@@ -5244,4 +5242,175 @@ def roifilt2(h_or_I, I_or_BW, BW_or_fun, fun=None):
         J[BW] = I_processed[BW]
 
     return J
+
+
+------------------------------------------Interpolacion
+
+import numpy as np
+
+def interp2(V, Xq, Yq, method='linear', extrapval=0.0):
+    """
+    interp2 tipo MATLAB (grid implícito):
+        Vq = interp2(V, Xq, Yq, method, extrapval)
+
+    - Xq: coordenadas x (columnas) en 1-based (MATLAB)
+    - Yq: coordenadas y (filas)    en 1-based (MATLAB)
+    - method: 'nearest' | 'linear' | 'cubic'
+    - extrapval: valor fuera de la imagen
+    - Soporta V 2D (H,W) y 3D (H,W,C) canal a canal
+    """
+    V = np.asarray(V, dtype=float)
+    Xq = np.asarray(Xq, dtype=float)
+    Yq = np.asarray(Yq, dtype=float)
+
+    # MATLAB (1-based) -> Python (0-based)
+    x = Xq - 1.0
+    y = Yq - 1.0
+
+    m = method.lower()
+    if m == 'bilinear':
+        m = 'linear'
+    if m == 'bicubic':
+        m = 'cubic'
+
+    if m == 'nearest':
+        return _interp2_nearest(V, x, y, extrapval)
+    if m == 'linear':
+        return _interp2_bilinear(V, x, y, extrapval)
+    if m == 'cubic':
+        return _interp2_bicubic(V, x, y, extrapval)
+
+    raise ValueError("method debe ser 'nearest', 'linear'/'bilinear' o 'cubic'/'bicubic'.")
+
+
+def _interp2_nearest(V, x, y, extrapval):
+    H, W = V.shape[:2]
+    xi = np.rint(x).astype(int)
+    yi = np.rint(y).astype(int)
+
+    valid = (xi >= 0) & (xi < W) & (yi >= 0) & (yi < H)
+
+    if V.ndim == 2:
+        out = np.full(x.shape, extrapval, dtype=float)
+        out[valid] = V[yi[valid], xi[valid]]
+        return out
+
+    C = V.shape[2]
+    out = np.full((*x.shape, C), extrapval, dtype=float)
+    out[valid, :] = V[yi[valid], xi[valid], :]
+    return out
+
+
+def _interp2_bilinear(V, x, y, extrapval):
+    H, W = V.shape[:2]
+
+    x0 = np.floor(x).astype(int)
+    y0 = np.floor(y).astype(int)
+    x1 = x0 + 1
+    y1 = y0 + 1
+
+    valid = (x0 >= 0) & (x1 < W) & (y0 >= 0) & (y1 < H)
+
+    wx = x - x0
+    wy = y - y0
+
+    if V.ndim == 2:
+        out = np.full(x.shape, extrapval, dtype=float)
+        if not np.any(valid):
+            return out
+
+        I00 = V[y0[valid], x0[valid]]
+        I10 = V[y0[valid], x1[valid]]
+        I01 = V[y1[valid], x0[valid]]
+        I11 = V[y1[valid], x1[valid]]
+
+        wxv = wx[valid]
+        wyv = wy[valid]
+
+        out[valid] = (1-wxv)*(1-wyv)*I00 + (wxv)*(1-wyv)*I10 + (1-wxv)*(wyv)*I01 + (wxv)*(wyv)*I11
+        return out
+
+    C = V.shape[2]
+    out = np.full((*x.shape, C), extrapval, dtype=float)
+    if not np.any(valid):
+        return out
+
+    I00 = V[y0[valid], x0[valid], :]
+    I10 = V[y0[valid], x1[valid], :]
+    I01 = V[y1[valid], x0[valid], :]
+    I11 = V[y1[valid], x1[valid], :]
+
+    wxv = wx[valid][:, None]
+    wyv = wy[valid][:, None]
+
+    out[valid, :] = (1-wxv)*(1-wyv)*I00 + (wxv)*(1-wyv)*I10 + (1-wxv)*(wyv)*I01 + (wxv)*(wyv)*I11
+    return out
+
+
+def _cubic_w(t, a=-0.5):
+    t = np.abs(t)
+    w = np.zeros_like(t, dtype=float)
+
+    m1 = (t <= 1)
+    m2 = (t > 1) & (t < 2)
+
+    w[m1] = (a+2)*t[m1]**3 - (a+3)*t[m1]**2 + 1
+    w[m2] = a*t[m2]**3 - 5*a*t[m2]**2 + 8*a*t[m2] - 4*a
+    return w
+
+
+def _interp2_bicubic(V, x, y, extrapval):
+    """
+    Bicúbica separable (4x4). Didáctica: clara, no optimizada.
+    """
+    H, W = V.shape[:2]
+
+    x0 = np.floor(x).astype(int)
+    y0 = np.floor(y).astype(int)
+
+    # Para bicúbica se requieren vecinos x0-1..x0+2 y y0-1..y0+2
+    valid = (x0-1 >= 0) & (x0+2 < W) & (y0-1 >= 0) & (y0+2 < H)
+
+    if V.ndim == 2:
+        out = np.full(x.shape, extrapval, dtype=float)
+        if not np.any(valid):
+            return out
+
+        dx = x - x0
+        dy = y - y0
+
+        acc = np.zeros_like(x, dtype=float)
+
+        for j in range(-1, 3):
+            wy = _cubic_w(dy - j)
+            yj = y0 + j
+            for i in range(-1, 3):
+                wx = _cubic_w(dx - i)
+                xi = x0 + i
+                acc += (wx * wy) * V[yj, xi]
+
+        out[valid] = acc[valid]
+        return out
+
+    C = V.shape[2]
+    out = np.full((*x.shape, C), extrapval, dtype=float)
+    if not np.any(valid):
+        return out
+
+    dx = x - x0
+    dy = y - y0
+
+    acc = np.zeros((*x.shape, C), dtype=float)
+
+    for j in range(-1, 3):
+        wy = _cubic_w(dy - j)
+        yj = y0 + j
+        for i in range(-1, 3):
+            wx = _cubic_w(dx - i)
+            xi = x0 + i
+            w = (wx * wy)[..., None]
+            acc += w * V[yj, xi, :]
+
+    out[valid, :] = acc[valid, :]
+    return out
 
