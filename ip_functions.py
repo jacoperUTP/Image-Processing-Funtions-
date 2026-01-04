@@ -87,41 +87,28 @@ def imwrite(I, filename, cmap=None):
 import numpy as np
 import matplotlib.pyplot as plt
 
-def imshow(I, *args):
+import numpy as np
+import matplotlib.pyplot as plt
+
+def imshow(I, *args, show=True):
     """
     Muestra una imagen usando Matplotlib (sintaxis tipo MATLAB).
-
-    Soporta, además de lo existente:
-      - imshow(R, [])
-      - imshow(R, [], 'Xdata', theta, 'Ydata', xp, 'InitialMagnification', 'fit')
-
-    Notas:
-      - 'Xdata' y 'Ydata' se implementan con 'extent' en Matplotlib.
-      - Si se usa Xdata/Ydata, se dejan los ejes visibles (útil para sinogramas).
-      - 'InitialMagnification','fit' se acepta por compatibilidad (no requiere acción extra).
+    Ahora retorna el 'mappable' (handle) para poder usar colorbar().
     """
 
     if not isinstance(I, np.ndarray):
         I = np.array(I)
 
-    # ----------------------------
-    # Parámetros por defecto
-    # ----------------------------
-    display_range = None   # None | 'auto' | [vmin, vmax]
+    display_range = None
     cmap = None
     xdata = None
     ydata = None
-    initial_mag = None  # solo compatibilidad
 
-    # ----------------------------
-    # Parser MATLAB-like: soporta name-value pairs
-    # ----------------------------
     args_list = list(args)
     i = 0
     while i < len(args_list):
         a = args_list[i]
 
-        # Caso rango: [] o [vmin,vmax]
         if isinstance(a, (list, tuple, np.ndarray)) and not isinstance(a, str):
             arr = np.asarray(a)
             if arr.size == 0:
@@ -131,36 +118,28 @@ def imshow(I, *args):
             i += 1
             continue
 
-        # Caso string: puede ser colormap o nombre de parámetro
         if isinstance(a, str):
             key = a.strip().lower()
-
-            # ¿name-value pair?
-            if key in ['xdata', 'ydata', 'initialmagnification'] and (i + 1) < len(args_list):
+            if key in ['xdata', 'ydata'] and (i + 1) < len(args_list):
                 val = args_list[i + 1]
-
                 if key == 'xdata':
                     xdata = np.asarray(val, dtype=float).ravel()
-                elif key == 'ydata':
+                else:
                     ydata = np.asarray(val, dtype=float).ravel()
-                elif key == 'initialmagnification':
-                    # compatibilidad: típicamente 'fit'
-                    initial_mag = str(val)
-
                 i += 2
                 continue
 
-            # Si no es name-value, se interpreta como colormap
+            if key == 'initialmagnification' and (i + 1) < len(args_list):
+                i += 2
+                continue
+
             cmap = a
             i += 1
             continue
 
-        # Si aparece algo no reconocido, se ignora de forma segura
         i += 1
 
-    # ----------------------------
-    # CASO 1: RGB (M×N×3 o M×N×4)
-    # ----------------------------
+    # CASO 1: RGB
     if I.ndim == 3 and I.shape[2] in [3, 4]:
         if I.dtype == np.uint8:
             I_display = I.astype(np.float32) / 255.0
@@ -169,20 +148,18 @@ def imshow(I, *args):
         else:
             I_display = I
 
-        plt.imshow(np.clip(I_display, 0, 1))
+        h = plt.imshow(np.clip(I_display, 0, 1))
         plt.axis('off')
-        plt.show()
-        return
+        if show:
+            plt.show()
+        return h
 
-    # ----------------------------
-    # CASO 2: Grises o Binaria (M×N)
-    # ----------------------------
+    # CASO 2: 2D
     if I.ndim == 2:
         es_binaria = (I.dtype == bool) or (np.array_equal(I, I.astype(bool)))
         if cmap is None:
             cmap = 'gray'
 
-        # Determinar vmin, vmax
         if display_range is None:
             if es_binaria:
                 vmin, vmax = 0, 1
@@ -197,30 +174,23 @@ def imshow(I, *args):
         else:
             vmin, vmax = float(display_range[0]), float(display_range[1])
 
-        # Si se entregan Xdata/Ydata, se usan como ejes (extent)
         use_extent = (xdata is not None) or (ydata is not None)
-        extent = None
-
         if use_extent:
-            # Si falta alguno, se construye implícito (tipo MATLAB)
             if xdata is None:
                 xdata = np.arange(I.shape[1], dtype=float)
             if ydata is None:
                 ydata = np.arange(I.shape[0], dtype=float)
 
-            # Xdata corresponde a columnas; Ydata a filas
-            # extent = [xmin, xmax, ymin, ymax]
             extent = [float(xdata[0]), float(xdata[-1]), float(ydata[0]), float(ydata[-1])]
-
-            plt.imshow(I, cmap=cmap, vmin=vmin, vmax=vmax, aspect='auto', extent=extent, origin='upper')
-            # En sinogramas interesa ver ejes
+            h = plt.imshow(I, cmap=cmap, vmin=vmin, vmax=vmax, aspect='auto', extent=extent, origin='upper')
             plt.axis('on')
         else:
-            plt.imshow(I, cmap=cmap, vmin=vmin, vmax=vmax)
+            h = plt.imshow(I, cmap=cmap, vmin=vmin, vmax=vmax)
             plt.axis('off')
 
-        plt.show()
-        return
+        if show:
+            plt.show()
+        return h
 
     raise ValueError(f"Dimensiones {I.shape} no soportadas")
 
