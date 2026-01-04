@@ -51,13 +51,13 @@ Funciones beneficiadas: `imrotate`, `imresize`, `imtranslate`, `imwarp`.
 
 ### Desde GitHub (recomendado para desarrollo)
 
-    git clone https://github.com/jacoperUTP/CV.git
+    git clone https://github.com/jacoperUTP/Image-Processing-Funtions-.git
     cd CV
     pip install -e .
 
 ### Instalación directa
 
-    pip install git+https://github.com/jacoperUTP/CV.git
+    pip install git+https://github.com/jacoperUTP/Image-Processing-Funtions-.git
 
 ### Requisitos
 
