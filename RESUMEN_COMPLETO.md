@@ -40,7 +40,7 @@ Este paquete contiene **TODOS los archivos necesarios** para publicar profesiona
 - **Contenido:**
   - Licencia MIT estándar
   - Copyright Universidad Tecnológica de Pereira 2025
-  - Tu nombre como autor
+  - Jimy Alexander Cortés, Francisco Alejandro Medina
 - **Acción:** Crear en raíz del repositorio
 
 ### 5️⃣ **requirements.txt**
