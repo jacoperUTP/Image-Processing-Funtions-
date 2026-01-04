@@ -1,7 +1,7 @@
-#4/enero/2026 1:58pm Colombia
+#4/enero/2026 2:20pm Colombia
 
 
-__version__ = "2.0.1"          # Actualizar
+__version__ = "2.0.2"          # Actualizar
 __author__  = "Jimy Alexander Cortés-Osorio, Francisco Alejandro Medina-Aguirre,  UTP"
 __date__    = "2026-01-03"     # Fecha de la última edición
 
@@ -4030,7 +4030,7 @@ def imnoise(imagen, tipo, parametro1=None, parametro2=None):
 
 
 # ====================================================================
-# 🛠 Utilidades Internas y Funciones Avanzadas
+#  Utilidades Internas y Funciones Avanzadas
 # ====================================================================
 
 def non_overflowing_sum(a,b):
@@ -5074,126 +5074,113 @@ def roifilt2(h_or_I, I_or_BW, BW_or_fun, fun=None):
 #-----------------------------------------------
 
 
+import numpy as np
+
 def radon(I, theta=None, method='linear', extrapval=0.0, normalize=False):
     """
-    Transformada de Radon con salida y parámetros MATLAB-like.
+    Transformada de Radon (MATLAB-like) usando SOLO NumPy + interp2 (ya implementada por el usuario).
 
-    Sintaxis (MATLAB)
-    -----------------
+    Sintaxis tipo MATLAB
+    --------------------
     R       = radon(I)
     R       = radon(I, theta)
     [R, xp] = radon(I, theta)
 
-    Extensión (opcional en esta librería)
-    -------------------------------------
+    Extensión (en esta librería)
+    ----------------------------
     [R, xp] = radon(I, theta, method='linear', extrapval=0.0, normalize=False)
 
     Parámetros
     ----------
-    I : ndarray (2D)
-        Imagen 2D (grises). En MATLAB se procesa como double; aquí se convierte a float.
-    theta : escalar o vector (grados), opcional
-        Si es None -> 0:179 (como MATLAB).
-    method : str, opcional
-        Interpolación para el muestreo al rotar (se pasa a interp2):
-        'nearest' | 'linear'/'bilinear' | 'cubic'/'bicubic'
-        Nota: si su interp2 'cubic' es didáctica con bucles, será lenta.
-    extrapval : float, opcional
-        Valor fuera de la imagen (relleno).
-    normalize : bool, opcional
-        Si True: aplica mat2gray(I) antes de la Radon (útil si I es uint8/uint16).
-        MATLAB NO normaliza automáticamente; por defecto False para mantener fidelidad.
+    I : ndarray (H×W)
+        Imagen 2D (grises).
+    theta : None o array (grados)
+        Si None: 0:179 (MATLAB-like).
+    method : str
+        Interpolación para el muestreo por rotación: 'nearest' | 'linear' | 'cubic'
+        Se aceptan alias MATLAB típicos ('bilinear','bicubic','spline',...) y se mapean.
+    extrapval : float
+        Valor fuera de la imagen.
+    normalize : bool
+        Si True aplica mat2gray(I) antes de procesar (MATLAB no lo hace por defecto).
 
     Retorna
     -------
-    R : ndarray
-        Si theta es escalar -> vector 1D (tipo columna MATLAB).
-        Si theta es vector  -> matriz (len(xp) × len(theta)), cada columna es un ángulo.
-    xp : ndarray (len(xp),)
-        Coordenadas radiales correspondientes a cada fila de R.
-        MATLAB define el píxel central como floor((size(I)+1)/2). :contentReference[oaicite:0]{index=0}
-
-    Detalle clave para coincidir con MATLAB
-    ---------------------------------------
-    MATLAB produce un número de muestras radial (filas de R) igual a:
-        N = 2*ceil( norm([H,W]) / 2 ) + 3
-    Esto reproduce tamaños típicos como 145 para 100×100 y 185 para 128×128. :contentReference[oaicite:1]{index=1}
-
-    Requisito
-    ---------
-    Debe existir la función interp2(V, Xq, Yq, method='linear', extrapval=0.0)
-    con Xq,Yq en 1-based (MATLAB), tal como ya la tiene implementada.
+    R : ndarray (Nr×M)
+        Sinograma. Cada columna corresponde a un ángulo.
+    xp : ndarray (Nr,)
+        Coordenada radial asociada a filas de R (espaciado 1 píxel).
     """
     I = np.asarray(I)
     if I.ndim != 2:
         raise ValueError("radon: I debe ser una imagen 2D (H×W).")
 
-    # theta por defecto: 0..179 (MATLAB-like). :contentReference[oaicite:2]{index=2}
+    # theta por defecto: 0..179 (MATLAB-like)
     if theta is None:
         theta = np.arange(180, dtype=float)
     theta = np.asarray(theta, dtype=float).ravel()
 
-    # Normalización opcional (no MATLAB por defecto)
+    # Normalización opcional (NO es el comportamiento por defecto de MATLAB)
     if normalize:
-        # Se asume que mat2gray existe en el mismo módulo (como usted indicó).
         I = mat2gray(I)
 
-    # Convertir a float (MATLAB trabaja en double internamente)
     I = I.astype(float)
-
     H, W = I.shape
 
-    # Tamaño radial (filas del sinograma) para calcar MATLAB:
-    # N = 2*ceil( norm([H,W]) / 2 ) + 3  :contentReference[oaicite:3]{index=3}
-    N = int(2 * np.ceil(np.sqrt(H*H + W*W) / 2.0) + 3)
+    # Tamaño radial para imitar MATLAB (dependiente de la diagonal)
+    Nr = int(2 * np.ceil(np.sqrt(H * H + W * W) / 2.0) + 3)
 
-    # xp centrado, entero simétrico (MATLAB-like)
-    c = (N - 1) / 2.0
-    xp = np.arange(N, dtype=float) - c
+    # xp centrado (espaciado 1 píxel)
+    c = (Nr - 1.0) / 2.0
+    xp = np.arange(Nr, dtype=float) - c
 
-    # Canvas cuadrado N×N y colocación centrada
-    Ip = np.full((N, N), float(extrapval), dtype=float)
+    # Colocar I centrada en un canvas cuadrado Nr×Nr
+    Ip = np.full((Nr, Nr), float(extrapval), dtype=float)
+    y0 = int(np.floor((Nr - H) / 2.0))
+    x0 = int(np.floor((Nr - W) / 2.0))
+    Ip[y0:y0 + H, x0:x0 + W] = I
 
-    y0 = int(np.floor((N - H) / 2.0))
-    x0 = int(np.floor((N - W) / 2.0))
-    Ip[y0:y0+H, x0:x0+W] = I
-
-    # Malla de salida (una sola pasada)
-    Yp, Xp = np.meshgrid(np.arange(N, dtype=float),
-                         np.arange(N, dtype=float),
+    # Malla de salida (una sola construcción)
+    Yp, Xp = np.meshgrid(np.arange(Nr, dtype=float),
+                         np.arange(Nr, dtype=float),
                          indexing='ij')
     Xr = Xp - c
     Yr = Yp - c
 
-    # Salida: (N × nTheta)
-    R = np.zeros((N, theta.size), dtype=float)
+    # Mapeo de nombres MATLAB -> los tres permitidos por interp2 del usuario
+    interp_in = (method if method is not None else 'linear')
+    interp_in = str(interp_in).lower().strip()
+    if interp_in in ['bilinear']:
+        interp_in = 'linear'
+    if interp_in in ['bicubic', 'spline', 'pchip', 'v5cubic']:
+        interp_in = 'cubic'
+    if interp_in not in ['nearest', 'linear', 'cubic']:
+        raise ValueError("radon: method debe ser 'nearest', 'linear' o 'cubic' (o alias MATLAB).")
+
+    # Salida (Nr × nTheta)
+    R = np.zeros((Nr, theta.size), dtype=float)
 
     for k, th in enumerate(theta):
         a = np.deg2rad(th)
         ca = np.cos(a)
         sa = np.sin(a)
 
-        # Mapeo inverso (rotación por -theta) hacia Ip:
+        # Rotación inversa (muestreo): (x',y') -> (x,y) en el canvas Ip
         Xin = ( Xr * ca + Yr * sa) + c
         Yin = (-Xr * sa + Yr * ca) + c
 
-        # interp2 es 1-based (MATLAB) -> sumar 1
+        # interp2 del usuario trabaja en 1-based (MATLAB)
         Xq = Xin + 1.0
         Yq = Yin + 1.0
 
-        # Muestreo por interpolación (malla completa)
-        Irot = interp2(Ip, Xq, Yq, method=method, extrapval=extrapval)
+        Irot = interp2(Ip, Xq, Yq, method=interp_in, extrapval=extrapval)
 
-        # Proyección: sumar a lo largo de y (filas) => función de x' (columnas)
+        # Proyección: suma sobre filas (y), produce función de x' (columnas)
         R[:, k] = np.sum(Irot, axis=0)
 
-    # MATLAB: si theta es escalar, R es un vector columna (aquí se retorna 1D)
     if theta.size == 1:
         return R[:, 0], xp
-
     return R, xp
-
-
 
 
 def iradon(R, theta=None, interp='linear', filt='Ram-Lak', frequency_scaling=1.0, output_size=None, return_filter=False):
@@ -5206,14 +5193,19 @@ def iradon(R, theta=None, interp='linear', filt='Ram-Lak', frequency_scaling=1.0
         'nearest' | 'linear' | 'cubic'
     Filtro (SOLO):
         'Ram-Lak' | 'None'
-    Filtrado:
-        1D por proyección (sobre rho), NO fft2.
 
-    Firma MATLAB-like
-    -----------------
-    I       = iradon(R, theta)
-    I       = iradon(R, theta, interp, filt, frequency_scaling, output_size)
-    [I, H]  = iradon(___)  -> en Python: iradon(..., return_filter=True)
+    Ajuste clave (para NO obtener la imagen invertida)
+    --------------------------------------------------
+    En imágenes, el índice de fila aumenta hacia abajo (sistema "imagen").
+    En la geometría de Radon/FBP, es más natural trabajar con y positivo hacia arriba (cartesiano).
+    Para alinear la convención y evitar reconstrucciones "al revés", se define:
+
+        Y_cart = cI - Y_img
+
+    y luego se usa:
+        t = X*cos(theta) + Y_cart*sin(theta)
+
+    De este modo, la reconstrucción queda consistente con la radon() anterior sin aplicar flips post-proceso.
     """
     R = np.asarray(R)
     if R.ndim == 1:
@@ -5225,17 +5217,19 @@ def iradon(R, theta=None, interp='linear', filt='Ram-Lak', frequency_scaling=1.0
 
     # --- theta MATLAB-like ---
     if theta is None or (isinstance(theta, (list, tuple, np.ndarray)) and np.asarray(theta).size == 0):
+        # Distribución uniforme en [0,180) con M proyecciones (típico en MATLAB)
         theta_vec = np.arange(M, dtype=float) * (180.0 / M)
     else:
         theta_arr = np.asarray(theta, dtype=float).ravel()
         if theta_arr.size == 1:
+            # Paso angular constante
             theta_vec = np.arange(M, dtype=float) * float(theta_arr[0])
         else:
             if theta_arr.size != M:
                 raise ValueError("iradon: len(theta) debe coincidir con columnas de R.")
             theta_vec = theta_arr
 
-    # --- output_size MATLAB-like aproximado ---
+    # --- output_size (aproximación MATLAB-like) ---
     if output_size is None:
         output_size = int(2 * np.floor(Nr / (2.0 * np.sqrt(2.0))))
         output_size = max(output_size, 1)
@@ -5258,7 +5252,7 @@ def iradon(R, theta=None, interp='linear', filt='Ram-Lak', frequency_scaling=1.0
     Rf = R.astype(float)
 
     # ------------------------------------------------------------
-    # 1) Filtrado 1D por columnas (rho) con Ram-Lak (rampa)
+    # 1) Filtrado 1D (por columnas) con Ram-Lak (rampa)
     # ------------------------------------------------------------
     if filt_in == 'none':
         Rfilt = Rf
@@ -5268,11 +5262,10 @@ def iradon(R, theta=None, interp='linear', filt='Ram-Lak', frequency_scaling=1.0
         Rp = np.zeros((nfft, M), dtype=float)
         Rp[:Nr, :] = Rf
 
-        # Respuesta en frecuencia (FFT completa) del filtro Ram-Lak
-        f = np.fft.fftfreq(nfft)          # [-0.5, 0.5)
-        fa = np.abs(f)                    # [0, 0.5]
+        f = np.fft.fftfreq(nfft)     # [-0.5, 0.5)
+        fa = np.abs(f)               # rampa |f|
         cutoff = 0.5 * fs
-        H = fa
+        H = fa.copy()
         H[fa > cutoff] = 0.0
 
         F = np.fft.fft(Rp, axis=0)
@@ -5281,17 +5274,27 @@ def iradon(R, theta=None, interp='linear', filt='Ram-Lak', frequency_scaling=1.0
         Rfilt = rpf[:Nr, :]
 
     # ------------------------------------------------------------
-    # 2) Retroproyección con interpolación 1D (nearest/linear/cubic)
+    # 2) Retroproyección (malla completa) + interpolación 1D
     # ------------------------------------------------------------
     cI = (N - 1.0) / 2.0
-    Y, X = np.meshgrid(np.arange(N, dtype=float), np.arange(N, dtype=float), indexing='ij')
-    X -= cI
-    Y -= cI
 
-    # Centro radial (0-based) ~ ceil(Nr/2)-1
-    cR = (np.ceil(Nr / 2.0) - 1.0)
+    # Coordenadas de imagen (índices) -> coordenadas centradas
+    Yi, Xi = np.meshgrid(np.arange(N, dtype=float),
+                         np.arange(N, dtype=float),
+                         indexing='ij')
+    X = Xi - cI
+
+    # Ajuste clave para evitar inversión: y positivo hacia arriba (cartesiano)
+    Y = cI - Yi
+
+    # Centro radial coherente con xp de radon(): xp = arange(Nr) - (Nr-1)/2
+    cR = (Nr - 1.0) / 2.0
 
     def _interp1(p, u, kind):
+        """
+        Interpolación 1D didáctica (nearest/linear/cubic Keys) sobre un vector p.
+        Fuera del soporte se rellena con 0 (comportamiento típico de FBP).
+        """
         p = np.asarray(p, dtype=float)
 
         if kind == 'nearest':
@@ -5311,7 +5314,7 @@ def iradon(R, theta=None, interp='linear', filt='Ram-Lak', frequency_scaling=1.0
                 out[ok] = (1.0 - w[ok]) * p[u0[ok]] + w[ok] * p[u1[ok]]
             return out
 
-        # kind == 'cubic'  (Keys, a=-0.5), didáctica
+        # kind == 'cubic' (Keys, a=-0.5)
         a = -0.5
         u0 = np.floor(u).astype(int)
         t = u - u0
@@ -5341,18 +5344,23 @@ def iradon(R, theta=None, interp='linear', filt='Ram-Lak', frequency_scaling=1.0
 
     for k, th in enumerate(theta_vec):
         a = np.deg2rad(th)
-        t = X * np.cos(a) + Y * np.sin(a)   # coordenada detector
-        u = t + cR                          # índice radial (0-based flotante)
+        ca = np.cos(a)
+        sa = np.sin(a)
+
+        # Coordenada detector (rho): t = x cos + y sin (con y cartesiano hacia arriba)
+        t = X * ca + Y * sa
+
+        # Convertir a índice radial flotante (0-based)
+        u = t + cR
+
         img += _interp1(Rfilt[:, k], u, interp_in)
 
-    # Escala típica de FBP (coherente con MATLAB en práctica)
+    # Escala típica FBP (factor estándar usado en prácticas para coincidir con MATLAB)
     img *= (np.pi / (2.0 * len(theta_vec)))
 
     if return_filter:
         return img, H
     return img
-
-
 
 #-----------------------------------------------
 #     Interpolacion
