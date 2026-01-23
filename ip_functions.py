@@ -1,4 +1,4 @@
-#4/enero/2026 2:20pm Colombia
+#23/enero/2026 4:26pm Colombia
 
 
 __version__ = "2.0.2"          # Actualizar
@@ -3670,6 +3670,168 @@ def ifftshift(X, axes=None):
 
 
 
+# ====================================================================
+#  TRANSFORMADAS DE FOURIER
+# ====================================================================
+
+def dft(x):
+    """
+    Transformada Discreta de Fourier (DFT) 1-D.
+    
+    Calcula la DFT directa mediante la fórmula:
+    F[k] = sum_{n=0}^{N-1} x[n] * exp(-j*2*pi*k*n/N)
+    
+    Parámetros
+    ----------
+    x : array_like
+        Señal de entrada en el dominio del tiempo.
+        
+    Retorna
+    -------
+    np.ndarray
+        Transformada de Fourier de la señal de entrada (dominio de la frecuencia).
+        
+    Notas
+    -----
+    Esta implementación utiliza multiplicación matricial directa y tiene
+    complejidad O(N²). Para señales largas, FFT es más eficiente O(N log N).
+    """
+    x = np.asarray(x, dtype=complex).ravel()
+    N = x.size
+    n = np.arange(N)
+    k = n.reshape(N, 1)
+    W = np.exp(-1j * 2 * np.pi * k * n / N)
+    return W @ x
+
+
+def idft(X):
+    """
+    Transformada Inversa Discreta de Fourier (IDFT) 1-D.
+    
+    Calcula la IDFT mediante la fórmula:
+    x[n] = (1/N) * sum_{k=0}^{N-1} X[k] * exp(+j*2*pi*k*n/N)
+    
+    Parámetros
+    ----------
+    X : array_like
+        Señal de entrada en el dominio de la frecuencia.
+        
+    Retorna
+    -------
+    np.ndarray
+        Señal reconstruida en el dominio del tiempo.
+        
+    Notas
+    -----
+    La IDFT es esencialmente la DFT con exponencial conjugada y
+    normalización por 1/N.
+    """
+    X = np.asarray(X, dtype=complex).ravel()
+    N = X.size
+    n = np.arange(N)
+    k = n.reshape(N, 1)
+    Wc = np.exp(+1j * 2 * np.pi * k * n / N)
+    return (Wc @ X) / N
+
+
+# ====================================================================
+#  UTILIDADES ESPECTRALES
+# ====================================================================
+
+def dftshift(X, axis=-1):
+    """
+    Desplaza el componente DC (frecuencia cero) al centro del espectro.
+    
+    Realiza un desplazamiento circular de +floor(N/2) posiciones, moviendo
+    las componentes de frecuencia negativa a la primera mitad del array.
+    
+    Parámetros
+    ----------
+    X : array_like
+        Espectro de entrada (resultado de DFT).
+    axis : int, opcional
+        Eje sobre el cual realizar el desplazamiento. Por defecto -1.
+        
+    Retorna
+    -------
+    np.ndarray
+        Espectro con DC centrado.
+        
+    Notas
+    -----
+    Equivalente a np.fft.fftshift pero implementado sin dependencia de fft.
+    """
+    X = np.asarray(X)
+    axis = int(axis) % X.ndim
+    n = X.shape[axis]
+    s = n // 2
+    return np.roll(X, s, axis=axis)
+
+
+def idftshift(X, axis=-1):
+    """
+    Operación inversa de dftshift.
+    
+    Realiza un desplazamiento circular de +ceil(N/2) posiciones para
+    deshacer el efecto de dftshift.
+    
+    Parámetros
+    ----------
+    X : array_like
+        Espectro con DC centrado.
+    axis : int, opcional
+        Eje sobre el cual realizar el desplazamiento. Por defecto -1.
+        
+    Retorna
+    -------
+    np.ndarray
+        Espectro en formato estándar de DFT.
+        
+    Notas
+    -----
+    Equivalente a np.fft.ifftshift pero implementado sin dependencia de fft.
+    """
+    X = np.asarray(X)
+    axis = int(axis) % X.ndim
+    n = X.shape[axis]
+    s = (n + 1) // 2
+    return np.roll(X, s, axis=axis)
+
+
+def dftfreq(n, d):
+    """
+    Calcula el eje de frecuencias correspondiente a una DFT.
+    
+    Genera el vector de frecuencias discretas asociado a una DFT de longitud n
+    con periodo de muestreo d.
+    
+    Parámetros
+    ----------
+    n : int
+        Longitud de la DFT (número de muestras).
+    d : float
+        Periodo de muestreo en segundos [s].
+        
+    Retorna
+    -------
+    np.ndarray
+        Vector de frecuencias en Hz. Las frecuencias negativas aparecen
+        en la segunda mitad del array.
+        
+    Notas
+    -----
+    El rango de frecuencias va de -fs/2 a fs/2 donde fs = 1/d es la
+    frecuencia de muestreo. Equivalente a np.fft.fftfreq.
+    """
+    k = np.arange(n)
+    val = 1.0 / (n * d)
+    out = k.astype(float)
+    mask = k > (n // 2)
+    out[mask] = out[mask] - n
+    return out * val
+
+
+
 
 # ====================================================================
 #  Restauración y Métricas de Calidad
@@ -5534,3 +5696,83 @@ def _interp2_bicubic(V, x, y, extrapval):
     out[valid, :] = acc[valid, :]
     return out
 
+
+
+
+def phantom(n: int = 256) -> np.ndarray:
+    """
+    Genera la imagen del fantasma de Shepp-Logan utilizando NumPy.
+    
+    El fantasma de Shepp-Logan es una imagen de prueba estándar utilizada en
+    investigación de imágenes médicas, particularmente en tomografía computarizada
+    (TC) y resonancia magnética (RM). Consiste en 10 elipses con diferentes
+    intensidades que simulan una sección transversal simplificada de una cabeza
+    humana.
+    
+    Parámetros
+    ----------
+    n : int, opcional
+        Tamaño de la imagen cuadrada de salida (n x n píxeles). Por defecto 256.
+        
+    Retorna
+    -------
+    np.ndarray
+        Array 2D de forma (n, n) que contiene la imagen del fantasma con valores
+        de intensidad en punto flotante. La imagen está normalizada al rango
+        definido por las intensidades de las elipses.
+        
+    Notas
+    -----
+    El fantasma se construye en un sistema de coordenadas normalizado
+    [-1, 1] x [-1, 1] donde el origen (0, 0) corresponde al centro de la imagen.
+    Cada elipse se define por su intensidad, longitudes de semi-ejes, posición
+    del centro y ángulo de rotación. Las intensidades son aditivas donde las
+    elipses se superponen.
+    
+    Referencias
+    ----------
+    Shepp, L. A., & Logan, B. F. (1974). The Fourier reconstruction of a head
+    section. IEEE Transactions on Nuclear Science, 21(3), 21-43.
+    
+    Ejemplos
+    --------
+    >>> import matplotlib.pyplot as plt
+    >>> img = phantom(256)
+    >>> plt.imshow(img, cmap='gray')
+    >>> plt.show()
+    """
+    x = np.linspace(-1.0, 1.0, n)
+    y = np.linspace(-1.0, 1.0, n)
+    X, Y = np.meshgrid(x, -y)
+    
+    I = np.zeros((n, n), dtype=float)
+    
+    ellipses = [
+        [1.0,    0.69,   0.92,    0.0,      0.0,     0.0],
+        [-0.98,  0.6624, 0.874,   0.0,     -0.0184,  0.0],
+        [-0.02,  0.11,   0.31,    0.22,     0.0,    -18.0],
+        [-0.02,  0.16,   0.41,   -0.22,     0.0,     18.0],
+        [0.01,   0.21,   0.25,    0.0,      0.35,    0.0],
+        [0.01,   0.046,  0.046,   0.0,      0.1,     0.0],
+        [0.01,   0.046,  0.046,   0.0,     -0.1,     0.0],
+        [0.01,   0.046,  0.023,  -0.08,    -0.605,   0.0],
+        [0.01,   0.023,  0.023,   0.0,     -0.606,   0.0],
+        [0.01,   0.023,  0.046,   0.06,    -0.605,   0.0],
+    ]
+    
+    for amp, A, B, x0, y0, theta_deg in ellipses:
+        theta = np.radians(theta_deg)
+        cos_theta = np.cos(theta)
+        sin_theta = np.sin(theta)
+        
+        x_translated = X - x0
+        y_translated = Y - y0
+        
+        x_rot = x_translated * cos_theta + y_translated * sin_theta
+        y_rot = -x_translated * sin_theta + y_translated * cos_theta
+        
+        mask = (x_rot / A) ** 2 + (y_rot / B) ** 2 <= 1.0
+        
+        I[mask] += amp
+    
+    return I
