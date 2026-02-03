@@ -1,4 +1,4 @@
-#23/enero/2026 4:26pm Colombia
+#28/enero/2026 :43pm Colombia
 
 
 __version__ = "2.0.2"          # Actualizar
@@ -1164,104 +1164,84 @@ def imwarp(I, H, method='bilinear', extrapval=0.0):
 #  Filtros Espaciales
 # ====================================================================
 
-def imfilter(I, K, salida='same', tipodepad='symmetric', method='conv'):
+def imfilter(I, K, salida='same', tipodepad='symmetric', method='conv', astype_out='auto'):
     """
     Filtra una imagen 2D con un kernel dado.
-
-    Parámetros
-    ----------
-    I : ndarray
-        Parámetro I.
-    K : objeto
-        Parámetro K.
-    salida : objeto
-        Parámetro salida.
-    tipodepad : objeto
-        Parámetro tipodepad.
-    method : str
-        Parámetro method.
-
-    Retorna
-    -------
-    out : objeto
-        Resultado de imfilter.
-
-    Ejemplo
-    -------
-    >>> # uso básico
-    >>> out = imfilter(I, K, salida, tipodepad, method)
+    (Compatibilidad: por defecto mantiene el comportamiento típico para imágenes enteras,
+    y permite salida float para cálculos como SSIM.)
     """
-    # Verificar argumentos necesarios
     if K is None:
         raise ValueError('Es necesario el Kernel')
-    
-    # Mapeo de modos MATLAB a NumPy
+
     pad_mode_map = {
-        'replicate': 'edge',      # MATLAB replicate = NumPy edge
-        'symmetric': 'symmetric',  # Igual en ambos
-        'circular': 'wrap',        # MATLAB circular = NumPy wrap
-        'constant': 'constant'     # Igual en ambos
+        'replicate': 'edge',
+        'symmetric': 'symmetric',
+        'circular': 'wrap',
+        'constant': 'constant'
     }
-    
-    # Convertir modo de padding si es necesario
+
     if tipodepad in pad_mode_map:
         tipodepad_numpy = pad_mode_map[tipodepad]
     else:
-        tipodepad_numpy = tipodepad  # Usar directamente si no esta en el mapeo
-    
-    # Convertir imagen a float para los calculos
-    I = I.astype(float)
-    
-    # Parametros del Kernel
+        tipodepad_numpy = tipodepad
+
+    # ---- NUEVO: guardar dtype original antes de pasar a float ----
+    I0_dtype = np.asarray(I).dtype
+
+    # Convertir imagen a float para los calculos (se mantiene)
+    I = np.asarray(I, dtype=float)
+
     Tx, Ty = K.shape
     Finix = (Tx - 1) // 2
     Ciniy = (Ty - 1) // 2
-    
-    # Ajustar el padding segun las dimensiones de la imagen
+
     if I.ndim == 3:
         pad_width = ((Finix, Finix), (Ciniy, Ciniy), (0, 0))
     else:
         pad_width = ((Finix, Finix), (Ciniy, Ciniy))
-    
-    # Crear copia padded de la imagen (esta sera nuestra salida para 'full')
+
     If = np.pad(I, pad_width, mode=tipodepad_numpy)
-    
-    # Convertir a 3D si es necesario para procesamiento uniforme
+
     if If.ndim == 2:
         If = If[..., np.newaxis]
-    
-    # Preparar el kernel segun el metodo
+
     if method == 'conv':
         K = np.rot90(K, 2)
-    
-    # Obtener dimensiones
+
     M, N = If.shape[:2]
     L = If.shape[2] if If.ndim == 3 else 1
-    
-    # Copiar la imagen padded y solo modificar la region central
+
     If_temp = If.copy()
-    
-    # Aplicar el filtro solo en la region que cambia
-    for i in range(Finix, M-Finix):
-        for j in range(Ciniy, N-Ciniy):
+
+    for i in range(Finix, M - Finix):
+        for j in range(Ciniy, N - Ciniy):
             for canal in range(L):
-                W = If[i-Finix:i+Finix+1, j-Ciniy:j+Ciniy+1, canal]
+                W = If[i - Finix:i + Finix + 1, j - Ciniy:j + Ciniy + 1, canal]
                 If_temp[i, j, canal] = np.sum(W * K)
-    
+
     If = If_temp
-    
-    # Ajustar el tamano segun el tipo de salida
+
     if salida == 'same':
         If = If[Finix:-Finix, Ciniy:-Ciniy]
-    
-    # Volver a 2D si era 2D originalmente
+
     if L == 1:
         If = If[..., 0]
-    
-    # Normalizar y convertir a uint8
-    If = np.clip(If, 0, 255).astype(np.uint8)
-    
+
+    # ---- CAMBIO CLAVE: salida configurable / auto ----
+    if astype_out == 'uint8':
+        If = np.clip(If, 0, 255).astype(np.uint8)
+
+    elif astype_out == 'float':
+        If = If.astype(np.float64, copy=False)
+
+    else:  # 'auto'
+        if np.issubdtype(I0_dtype, np.integer):
+            If = np.clip(If, 0, 255).astype(I0_dtype)
+        else:
+            If = If.astype(np.float64, copy=False)
+
     return If
+
     
     
     
@@ -3829,6 +3809,224 @@ def dftfreq(n, d):
     mask = k > (n // 2)
     out[mask] = out[mask] - n
     return out * val
+
+
+# ====================================================================
+#  DCT / IDCT (Transformada Discreta del Coseno)
+# ====================================================================
+
+def dct(x, n=None, dim=None):
+    """
+    Transformada Discreta del Coseno tipo II (DCT-II).
+    Compatible con MATLAB dct().
+    
+    Parámetros
+    ----------
+    x : array_like
+        Señal de entrada (real).
+    n : int, opcional
+        Longitud de salida (pad/trunca si difiere de len(x)).
+    dim : int, opcional
+        Dimensión a transformar (default: primera dim > 1).
+        
+    Retorna
+    -------
+    ndarray
+        Coeficientes DCT.
+        
+    Ejemplo
+    -------
+    >>> x = np.array([1, 2, 3, 4])
+    >>> C = dct(x)
+    >>> x_rec = idct(C)
+    """
+    x = np.asarray(x, dtype=np.float64)
+    
+    if dim is None:
+        dim = _first_nontrivial_dim(x)
+    
+    if n is not None:
+        x = _pad_or_truncate(x, n, dim)
+    
+    # Mover dim al final
+    x = np.moveaxis(x, dim, -1)
+    N = x.shape[-1]
+    
+    if N == 0:
+        return np.moveaxis(x, -1, dim)
+    
+    # Extensión par: [x, flip(x)]
+    y = np.concatenate([x, x[..., ::-1]], axis=-1)
+    
+    # FFT y corrección de fase
+    Y = fft(y, n=2*N, dim=-1)[..., :N]
+    k = np.arange(N, dtype=np.float64)
+    w = np.exp(-1j * np.pi * k / (2.0 * N))
+    C = 0.5 * np.real(Y * w)
+    
+    # Normalización ortonormal
+    alpha = np.sqrt(2.0 / N)
+    C *= alpha
+    C[..., 0] /= np.sqrt(2.0)
+    
+    return np.moveaxis(C, -1, dim)
+
+
+def idct(C, n=None, dim=None):
+    """
+    Transformada Inversa Discreta del Coseno (IDCT).
+    Compatible con MATLAB idct().
+    
+    Parámetros
+    ----------
+    C : array_like
+        Coeficientes DCT (real).
+    n : int, opcional
+        Longitud de salida.
+    dim : int, opcional
+        Dimensión a transformar.
+        
+    Retorna
+    -------
+    ndarray
+        Señal reconstruida.
+        
+    Ejemplo
+    -------
+    >>> C = dct(x)
+    >>> x_rec = idct(C)
+    """
+    C = np.asarray(C, dtype=np.float64)
+    
+    if dim is None:
+        dim = _first_nontrivial_dim(C)
+    
+    if n is not None:
+        C = _pad_or_truncate(C, n, dim)
+    
+    C = np.moveaxis(C, dim, -1)
+    N = C.shape[-1]
+    
+    if N == 0:
+        return np.moveaxis(C, -1, dim)
+    
+    # Desnormalizar
+    ctilde = C.copy()
+    ctilde[..., 0] *= np.sqrt(2.0)
+    ctilde /= np.sqrt(2.0 / N)
+    
+    # Construir espectro para IFFT
+    k = np.arange(N, dtype=np.float64)
+    Y = np.zeros(C.shape[:-1] + (2*N,), dtype=np.complex128)
+    Y[..., :N] = 2.0 * ctilde * np.exp(1j * np.pi * k / (2.0 * N))
+    Y[..., N] = 0.0
+    if N > 1:
+        Y[..., N+1:] = np.conj(Y[..., 1:N][..., ::-1])
+    
+    # IFFT
+    x = np.real(ifft(Y, n=2*N, dim=-1)[..., :N])
+    
+    return np.moveaxis(x, -1, dim)
+
+
+def dct2(X, m=None, n=None):
+    """
+    Transformada Discreta del Coseno 2D (DCT2).
+    Compatible con MATLAB dct2().
+    
+    Parámetros
+    ----------
+    X : array_like
+        Imagen de entrada (real).
+    m : int, opcional
+        Número de filas.
+    n : int, opcional
+        Número de columnas.
+        
+    Retorna
+    -------
+    ndarray
+        Coeficientes DCT 2D.
+        
+    Ejemplo
+    -------
+    >>> img = np.random.rand(8, 8)
+    >>> C = dct2(img)
+    >>> img_rec = idct2(C)
+    """
+    X = np.asarray(X, dtype=np.float64)
+    if X.ndim < 2:
+        X = np.atleast_2d(X)
+    
+    if m is not None:
+        X = _pad_or_truncate(X, m, axis=0)
+    if n is not None:
+        X = _pad_or_truncate(X, n, axis=1)
+    
+    # DCT separable
+    C = dct(X, dim=0)
+    C = dct(C, dim=1)
+    return C
+
+
+def idct2(C, m=None, n=None):
+    """
+    Transformada Inversa Discreta del Coseno 2D (IDCT2).
+    Compatible con MATLAB idct2().
+    
+    Parámetros
+    ----------
+    C : array_like
+        Coeficientes DCT 2D (real).
+    m : int, opcional
+        Número de filas.
+    n : int, opcional
+        Número de columnas.
+        
+    Retorna
+    -------
+    ndarray
+        Imagen reconstruida.
+        
+    Ejemplo
+    -------
+    >>> C = dct2(img)
+    >>> img_rec = idct2(C)
+    """
+    C = np.asarray(C, dtype=np.float64)
+    if C.ndim < 2:
+        C = np.atleast_2d(C)
+    
+    if m is not None:
+        C = _pad_or_truncate(C, m, axis=0)
+    if n is not None:
+        C = _pad_or_truncate(C, n, axis=1)
+    
+    # IDCT separable
+    X = idct(C, dim=1)
+    X = idct(X, dim=0)
+    return X
+
+
+# ====================================================================
+#  Función auxiliar ( necesaria)
+# ====================================================================
+
+def _pad_or_truncate(X, n, axis):
+    """Pad con ceros o trunca X a longitud n sobre eje axis."""
+    axis = axis % X.ndim
+    cur = X.shape[axis]
+    
+    if n == cur:
+        return X
+    if n < cur:
+        slices = [slice(None)] * X.ndim
+        slices[axis] = slice(0, n)
+        return X[tuple(slices)]
+    
+    pad_width = [(0, 0)] * X.ndim
+    pad_width[axis] = (0, n - cur)
+    return np.pad(X, pad_width, mode='constant', constant_values=0)
 
 
 
