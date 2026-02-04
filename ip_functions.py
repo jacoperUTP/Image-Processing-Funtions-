@@ -1,9 +1,9 @@
-#28/enero/2026 :43pm Colombia
+#3/febrero/2026 10:50pm Colombia
 
 
-__version__ = "2.0.2"          # Actualizar
+__version__ = "2.0.3"          # Actualizar
 __author__  = "Jimy Alexander Cortés-Osorio, Francisco Alejandro Medina-Aguirre,  UTP"
-__date__    = "2026-01-03"     # Fecha de la última edición
+__date__    = "2026-02-03"     # Fecha de la última edición
 
 def version():
     """
@@ -886,6 +886,113 @@ def lab2xyz(lab):
 
 
 
+def rgb2ycbcr(RGB):
+    """
+    Convierte una imagen RGB al espacio de color YCbCr.
+    
+    Parámetros
+    ----------
+    RGB : ndarray
+        Imagen RGB de tamaño MxNx3 (uint8).
+    
+    Retorna
+    -------
+    YCBCR : ndarray
+        Imagen en espacio de color YCbCr (uint8) con las mismas dimensiones
+        que la entrada.
+    
+    Ejemplo
+    -------
+    >>> # uso básico
+    >>> YCBCR = rgb2ycbcr(RGB)
+    """
+    if RGB.ndim != 3 or RGB.shape[2] != 3:
+        raise ValueError('rgb2ycbcr: La imagen debe ser MxNx3')
+    
+    if RGB.dtype != np.uint8:
+        raise ValueError('rgb2ycbcr: La imagen debe ser uint8')
+    
+    F, C, L = RGB.shape
+    
+    # Convertir a float64 para cálculos
+    RGB_float = RGB.astype(np.float64)
+    
+    # Offset para YCbCr
+    T = np.array([16, 128, 128])
+    
+    # Matriz de transformación RGB a YCbCr (estándar ITU-R BT.601)
+    M = np.array([
+        [65.481, 128.553, 24.966],
+        [-37.797, -74.203, 112.0],
+        [112.0, -93.786, -18.214]
+    ])
+    
+    YCBCR = np.zeros((F, C, L))
+    
+    for i in range(F):
+        for j in range(C):
+            rgb_pixel = np.array([RGB_float[i,j,0], RGB_float[i,j,1], RGB_float[i,j,2]])
+            ycbcr_pixel = M @ rgb_pixel + T
+            YCBCR[i,j,:] = ycbcr_pixel
+    
+    # Convertir de vuelta a uint8 con clipping
+    YCBCR = np.clip(YCBCR, 0, 255).astype(np.uint8)
+    
+    return YCBCR
+
+
+def ycbcr2rgb(YCBCR):
+    """
+    Convierte una imagen YCbCr al espacio de color RGB.
+    
+    Parámetros
+    ----------
+    YCBCR : ndarray
+        Imagen YCbCr de tamaño MxNx3 (uint8).
+    
+    Retorna
+    -------
+    RGB : ndarray
+        Imagen RGB (uint8) con las mismas dimensiones que la entrada.
+    
+    Ejemplo
+    -------
+    >>> # uso básico
+    >>> RGB = ycbcr2rgb(YCBCR)
+    """
+    if YCBCR.ndim != 3 or YCBCR.shape[2] != 3:
+        raise ValueError('ycbcr2rgb: La imagen debe ser MxNx3')
+    
+    if YCBCR.dtype != np.uint8:
+        raise ValueError('ycbcr2rgb: La imagen debe ser uint8')
+    
+    F, C, L = YCBCR.shape
+    
+    # Convertir a float64 para cálculos
+    YCBCR_float = YCBCR.astype(np.float64)
+    
+    # Offset para YCbCr
+    T = np.array([16, 128, 128])
+    
+    # Matriz de transformación inversa YCbCr a RGB
+    M_inv = np.array([
+        [0.00456621, 0.0, 0.00625893],
+        [0.00456621, -0.00153632, -0.00318811],
+        [0.00456621, 0.00791071, 0.0]
+    ])
+    
+    RGB = np.zeros((F, C, L))
+    
+    for i in range(F):
+        for j in range(C):
+            ycbcr_pixel = np.array([YCBCR_float[i,j,0], YCBCR_float[i,j,1], YCBCR_float[i,j,2]])
+            rgb_pixel = M_inv @ (ycbcr_pixel - T)
+            RGB[i,j,:] = rgb_pixel
+    
+    # Convertir de vuelta a uint8 con clipping
+    RGB = np.clip(RGB, 0, 255).astype(np.uint8)
+    
+    return RGB
 
 
 
