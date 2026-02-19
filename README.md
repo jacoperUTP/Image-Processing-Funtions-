@@ -3,102 +3,103 @@
 Librería completa de procesamiento de imágenes compatible con MATLAB.
 Incluye más de 60 funciones para manipulación, análisis y visualización de imágenes.
 
-## Funciones Principales (v2.0.0)
+## Funciones Disponibles (v2.0.0)
 
 ### 📷 Entrada/Salida
-- `imread` - Leer imágenes desde disco
-- `imwrite` - Guardar imágenes
-- `imshow` - Visualizar imágenes (compatible con MATLAB)
+- `imread` - Leer imagen desde archivo
+- `imwrite` - Guardar imagen en archivo
+- `imshow` - Mostrar imagen (con soporte para tipos de datos y rangos)
 
-### 🎨 Ajuste de Imágenes
-- `imadjust` - Ajuste de intensidad con mapeo no lineal
+### 🎨 Ajuste y Mejora
+- `imadjust` - Ajuste de intensidad de imagen
 - `histeq` - Ecualización de histograma
-- `stretchlim` - Límites de estiramiento automático
-- `imcomplement` - Complemento de imagen
-- `imhist` - Histograma de imagen
-- `mat2gray` - Normalización a [0,1]
+- `stretchlim` - Calcular límites de estiramiento de contraste
+- `imcomplement` - Complemento de imagen (negativo)
+- `imhist` - Calcular y mostrar histograma
+- `mat2gray` - Convertir matriz a imagen en escala de grises [0,1]
 
-### 🌈 Conversión de Color
-- `rgb2gray` - RGB a escala de grises
-- `rgb2hsv`, `hsv2rgb` - Conversión HSV
-- `rgb2lab`, `lab2rgb` - Conversión CIE Lab
-- `rgb2xyz`, `xyz2rgb` - Conversión XYZ
-- `xyz2lab`, `lab2xyz` - Lab ↔ XYZ
+### 🌈 Espacios de Color
+- `rgb2gray` - Convertir RGB a escala de grises
+- `imsplit` - Separar canales de color
+- `rgb2hsv`, `hsv2rgb` - Convertir entre RGB y HSV
+- `rgb2lab`, `lab2rgb` - Convertir entre RGB y CIELAB
+- `rgb2xyz`, `xyz2rgb` - Convertir entre RGB y CIEXYZ
+- `xyz2lab`, `lab2xyz` - Convertir entre CIEXYZ y CIELAB
+- `rgb2ycbcr`, `ycbcr2rgb` - Convertir entre RGB y YCbCr
 
 ### ✂️ Transformaciones Geométricas
+- `imresize` - Redimensionar imagen
 - `imrotate` - Rotar imagen
-- `imresize` - Cambiar tamaño
-- `imcrop` - Recortar región
+- `imcrop` - Recortar imagen
 - `imtranslate` - Trasladar imagen
-- `imwarp` - Transformación geométrica con matriz homográfica
-- `fitgeotrans` - Calcular transformación entre puntos
+- `imwarp` - Aplicar transformación geométrica proyectiva
+- `fitgeotrans` - Estimar transformación geométrica a partir de puntos de control
 
-### 🔍 Filtros y Convolución
-- `imfilter` - Filtrado con kernel personalizado
-- `medfilt2` - Filtro de mediana (reducción de ruido)
-- `ordfilt2` - Filtro de orden
-- `modefilt` - Filtro de moda
-- `stdfilt` - Filtro de desviación estándar
-- `entropyfilt` - Filtro de entropía
-- `rangefilt` - Filtro de rango
-- `fspecial` - Crear kernels especiales (gaussian, laplacian, sobel, prewitt, etc.)
+### 🔍 Filtros Espaciales
+- `imfilter` - Filtrado N-D de imágenes
+- `fspecial` - Crear filtros 2D predefinidos (average, disk, gaussian, laplacian, etc.)
+- `medfilt2` - Filtrado de mediana 2D
+- `ordfilt2` - Filtrado de orden 2D (min, max, mediana)
+- `modefilt` - Filtrado de moda
+- `stdfilt` - Filtrado de desviación estándar local
+- `entropyfilt` - Filtrado de entropía local
+- `rangefilt` - Filtrado de rango local (max - min)
+- `roifilt2` - Filtrado en Región de Interés (ROI)
 
 ### 🔲 Morfología Matemática
 - `strel` - Crear elemento estructurante
 - `imdilate` - Dilatación morfológica
 - `imerode` - Erosión morfológica
-- `imopen` - Apertura (erosión + dilatación)
-- `imclose` - Cierre (dilatación + erosión)
+- `imopen` - Apertura morfológica
+- `imclose` - Cierre morfológico
 
-### ✂️ Segmentación
-- `imbinarize` - Binarización con método automático u manual
-- `graythresh` - Umbral de Otsu
-- `adaptthresh` - Umbralización adaptativa
-- `im2bw` - Conversión a binario con umbral
-- `edge` - Detección de bordes (Sobel, Prewitt, Roberts, Canny, LoG)
-- `imgradient` - Gradiente de imagen
+### 🧩 Segmentación y Análisis
+- `imbinarize` - Binarizar imagen por umbral (Global, Otsu, Adaptativo)
+- `im2bw` - Convertir imagen a binaria con un umbral dado
+- `graythresh` - Calcular umbral global de Otsu
+- `adaptthresh` - Calcular umbral adaptativo
+- `otsuthresh` - Calcular umbral de Otsu basado en histograma
+- `edge` - Detectar bordes (Sobel, Prewitt, Roberts, Canny, LoG)
+- `imgradient` - Calcular magnitud y dirección del gradiente
+- `bwlabel` - Etiquetar componentes conectados en imagen binaria (Union-Find)
+- `label2rgb` - Visualizar etiquetas como imagen RGB
+- `regionprops` - Medir propiedades de regiones de imagen (Are, Perimetro, Centroide, BoundingBox, etc.)
+- `invmoments` - Momentos invariantes de Hu
 
-### 🏷️ Análisis de Componentes
-- `bwlabel` - Etiquetar componentes conectados (v2.0 CORREGIDO con Union-Find)
-- `label2rgb` - Convertir etiquetas a pseudocolor
-- `regionprops` - Propiedades de regiones (Area, Centroid, BoundingBox, Perimeter,
-  Eccentricity, Orientation, MajorAxisLength, MinorAxisLength, ConvexArea,
-  ConvexHull, ConvexImage, Solidity, Extent, PixelIdxList, PixelList, etc.)
-
-### 📐 Transformada de Hough
+### 📐 Hough y Formas
 - `hough` - Transformada de Hough para líneas
-- `houghpeaks` - Detectar picos en espacio de Hough
-- `houghlines` - Detectar segmentos de línea
-- `imfindcircles` - Detectar círculos (Phase Code y Two-Stage)
-- `viscircles` - Visualizar círculos
+- `houghpeaks` - Identificar picos en la transformada de Hough
+- `houghlines` - Extraer segmentos de línea de la transformada de Hough
+- `imfindcircles` - Encontrar círculos usando la transformada de Hough circular
+- `viscircles` - Visualizar círculos detectados
+- `insertShape` - Insertar formas (rectángulos, círculos, líneas, polígonos) en una imagen
+- `roipoly` - Definir ROI poligonal interactivamente o por coordenadas
 
-### 📊 Transformada de Fourier
-- `fft`, `ifft` - FFT 1D y su inversa
-- `fft2`, `ifft2` - FFT 2D y su inversa (compatible con MATLAB)
-- `fftshift`, `ifftshift` - Centrar espectro de frecuencias
+### 📊 Transformadas de Frecuencia (Fourier / DCT)
+- `fft`, `ifft` - Transformada Rápida de Fourier 1D (y inversa)
+- `fft2`, `ifft2` - Transformada Rápida de Fourier 2D (y inversa)
+- `fftshift`, `ifftshift` - Desplazar componente de frecuencia cero al centro
+- `dft`, `idft` - Transformada Discreta de Fourier 1D (No optimizada)
+- `dftshift`, `idftshift` - Desplazamiento para DFT
+- `dftfreq` - Frecuencias de muestra de la DFT
+- `dct`, `idct` - Transformada Discreta del Coseno 1D (y inversa)
+- `dct2`, `idct2` - Transformada Discreta del Coseno 2D (y inversa)
 
-### 🔧 Restauración y Métricas
-- `deconvwnr` - Deconvolución Wiener
-- `immse` - Error cuadrático medio
-- `psnr` - Relación señal-ruido pico
-- `ssim` - Índice de similitud estructural
+### 🌀 Transformada de Radon
+- `radon` - Transformada de Radon
+- `iradon` - Transformada Inversa de Radon
+- `phantom` - Generar fantasma de Shepp-Logan de prueba
 
-### 🎲 Ruido
-- `imnoise` - Agregar ruido (gaussian, salt & pepper, poisson, speckle)
+### 🔧 Restauración y Calidad
+- `deconvwnr` - Deconvolución de Wiener
+- `immse` - Error Cuadrático Medio
+- `psnr` - Relación Señal a Ruido Pico
+- `ssim` - Índice de Similitud Estructural
+- `imnoise` - Añadir ruido a una imagen (gaussian, salt & pepper, speckle, etc.)
 
-### 🔧 Utilidades
-- `imsplit` - Separar canales RGB
-- `non_overflowing_sum` - Suma sin desbordamiento
-
-## Nuevas Características en v2.0.0
-
-✅ **bwlabel CORREGIDO**: Implementación robusta con Union-Find que previene
-   la fragmentación incorrecta de objetos conectados
-
-✅ **regionprops MEJORADO**: Cálculo completo de propiedades geométricas
-   incluyendo ConvexHull, Eccentricity, Orientation, etc.
-
-✅ **Compatibilidad mejorada** con sintaxis MATLAB
+### �️ Utilidades
+- `non_overflowing_sum` - Suma segura sin desbordamiento
+- `interp2` - Interpolación 2D (funcionalidad interna expuesta)
 
 ## Instalación
 
