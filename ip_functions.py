@@ -1,4 +1,4 @@
-#3/febrero/2026 10:50pm Colombia
+#19/febrero/2026 7:20am Colombia
 
 
 __version__ = "2.0.3"          # Actualizar
@@ -1852,11 +1852,20 @@ def fspecial(tipo, T=None, S=None):
         return np.ones((Tx, Ty)) / (Tx * Ty)
 
     elif tipo == 'gaussian':
-        T = 3 if T is None else T
+        if T is None: T = 3
+        if hasattr(T, '__len__'): Tx, Ty = T[0], T[1]
+        else: Tx = Ty = T
+        
         S = 0.5 if S is None else S
-        Limite = (T - 1) / 2
-        x, y = np.meshgrid(np.linspace(-Limite, Limite, T), np.linspace(-Limite, Limite, T))
-        Z = (1 / (2 * np.pi * S ** 2)) * np.exp(-(x ** 2 + y ** 2) / (2 * S ** 2))
+        
+        LimX = (Ty - 1) / 2.0
+        LimY = (Tx - 1) / 2.0
+        
+        x = np.linspace(-LimX, LimX, Ty)
+        y = np.linspace(-LimY, LimY, Tx)
+        X, Y = np.meshgrid(x, y)
+        
+        Z = np.exp(-(X ** 2 + Y ** 2) / (2 * S ** 2))
         return Z / np.sum(Z)
 
     elif tipo == 'laplacian':
@@ -1866,14 +1875,28 @@ def fspecial(tipo, T=None, S=None):
                                          [A / 4, (1 - A) / 4, A / 4]])
 
     elif tipo == 'log':
-        T = 5 if T is None else T
+        if T is None: T = 5
+        if hasattr(T, '__len__'): Tx, Ty = T[0], T[1]
+        else: Tx = Ty = T
+        
         S = 0.5 if S is None else S
-        Limite = (T - 1) / 2
-        x, y = np.meshgrid(np.linspace(-Limite, Limite, T), np.linspace(-Limite, Limite, T))
-        gau = (1 / (2 * np.pi * S ** 2)) * np.exp(-(x ** 2 + y ** 2) / (2 * S ** 2))
-        gau /= np.sum(gau)
-        f2 = (gau * (x ** 2 + y ** 2 - (2 * S ** 2))) / (S ** 4)
-        return f2 - np.sum(f2) / (T ** 2)
+        
+        LimX = (Ty - 1) / 2.0
+        LimY = (Tx - 1) / 2.0
+        
+        x = np.linspace(-LimX, LimX, Ty)
+        y = np.linspace(-LimY, LimY, Tx)
+        X, Y = np.meshgrid(x, y)
+        
+        arg = -(X ** 2 + Y ** 2) / (2 * S ** 2)
+        gau = np.exp(arg)
+        gau[gau < np.finfo(gau.dtype).eps * np.max(gau)] = 0
+        
+        sumh = np.sum(gau)
+        if sumh != 0: gau /= sumh
+        
+        f2 = (gau * (X ** 2 + Y ** 2 - (2 * S ** 2))) / (S ** 4)
+        return f2 - np.sum(f2) / (Tx * Ty)
 
 
     elif tipo == 'motion':
@@ -2977,7 +3000,7 @@ def regionprops(L, properties=None):
         
         # Propiedades de elipse (momentos de segundo orden)
         if any(prop in properties for prop in ['majoraxislength', 'minoraxislength', 'orientation', 'eccentricity']):
-            maj, min_axis, ori, ecc = _calculate_ellipse_properties(rows, cols, cx, cy)
+            maj, min_axis, ori, ecc = _calculate_ellipse_properties_v2(rows, cols, cx, cy)
             if 'majoraxislength' in properties:
                 region_props['MajorAxisLength'] = maj
             if 'minoraxislength' in properties:
@@ -4860,7 +4883,7 @@ def _calculate_perimeter_chain8(mask):
     return n_cardinal + np.sqrt(2) * n_diagonal
 
 
-def _calculate_ellipse_properties(rows, cols, cx, cy):
+def _calculate_ellipse_properties_v2(rows, cols, cx, cy):
     """
     Función _calculate_ellipse_properties de la librería de procesamiento de imágenes.
 
@@ -4907,20 +4930,48 @@ def _calculate_ellipse_properties(rows, cols, cx, cy):
     major_axis = 4 * np.sqrt(max(lambda1, 0))
     minor_axis = 4 * np.sqrt(max(lambda2, 0))
     
-    # Orientación (convención de MATLAB)
-    if uyy > uxx:
-        theta = 0.5 * np.arctan2(2 * uxy, uyy - uxx)
-        orientation = theta * 180 / np.pi
-    else:
-        theta = 0.5 * np.arctan2(2 * uxy, uyy - uxx)
-        orientation = 90 + theta * 180 / np.pi
+    # --- Cálculo de Orientación Estándar (Momentos Centrales) ---
+    # Usando la fórmula estándar derivada de la matriz de covarianza de imagen 2D
+    # theta = 0.5 * arctan2(2 * mu_11, mu_20 - mu_02)
+    # Donde:
+    # mu_11 = cov(x, y) = uxy
+    # mu_20 = var(x) = uxx
+    # mu_02 = var(y) = uyy
     
-    # Normalizar a [-90, 90]
-    while orientation > 90:
-        orientation -= 180
-    while orientation <= -90:
+    # Nota: np.arctan2 devuelve valores en (-pi, pi]
+    # Al multiplicar por 0.5, el rango es (-pi/2, pi/2] -> (-90, 90] grados
+    
+    numerator = 2 * uxy
+    denominator = uxx - uyy
+    
+    # Calcular ángulo en radianes
+    theta_rad = 0.5 * np.arctan2(numerator, denominator)
+    
+    # Convertir a grados
+    orientation_deg = np.degrees(theta_rad)
+    
+    # Ajuste por convención:
+    # En imágenes, el eje Y crece hacia abajo. 
+    # La convención usual (e.g., MATLAB regionprops) es medir el ángulo 
+    # entre el eje mayor de la elipse y el eje X horizontal, 
+    # positivo en sentido antihorario (hacia Y negativo en pantalla).
+    # Sin embargo, dado que Y "baja", una rotación visual "antihoraria" 
+    # en coordenadas de pantalla suele corresponder a un ángulo negativo matemático.
+    
+    # Para consistencia con skimage/MATLAB:
+    # Si la elipse está vertical (uyy > uxx), el ángulo tiende a +/- 90.
+    # Si está horizontal (uxx > uyy), tiende a 0.
+    
+    # Mantendremos el valor directo pero invertido de signo para compensar el eje Y
+    orientation = -orientation_deg
+
+    # Asegurar rango [-90, 90] explícitamente y evitar valores grandes
+    # Asegurar rango [-90, 90] explícitamente y evitar valores grandes
+    if orientation <= -90:
         orientation += 180
-    
+    elif orientation > 90:
+        orientation -= 180
+        
     # Excentricidad
     a = major_axis / 2
     b = minor_axis / 2
@@ -4928,7 +4979,7 @@ def _calculate_ellipse_properties(rows, cols, cx, cy):
         eccentricity = 0
     else:
         eccentricity = np.sqrt(max(0, 1 - (b/a)**2))
-    
+        
     return major_axis, minor_axis, orientation, eccentricity
 
 
