@@ -1,9 +1,9 @@
-#19/febrero/2026 7:20am Colombia
+#21/marzo/2026 12:1:21pm Colombia
 
 
-__version__ = "2.0.3"          # Actualizar
+__version__ = "2.0.4"          # Actualizar
 __author__  = "Jimy Alexander Cortés-Osorio, Francisco Alejandro Medina-Aguirre,  UTP"
-__date__    = "2026-02-03"     # Fecha de la última edición
+__date__    = "2026-3-21"     # Fecha de la última edición
 
 def version():
     """
@@ -84,11 +84,6 @@ def imwrite(I, filename, cmap=None):
         I = np.clip(I, 0, 255).astype(np.uint8)
     plt.imsave(filename, I, cmap=cmap if cmap else None)
 
-import numpy as np
-import matplotlib.pyplot as plt
-
-import numpy as np
-import matplotlib.pyplot as plt
 
 def imshow(I, *args, show=True):
     """
@@ -239,45 +234,50 @@ def imhist(r, ax=None, ver=True):
 
     Parámetros
     ----------
-    r : objeto
-        Parámetro r.
-    ax : matplotlib.axes.Axes
-        Parámetro ax.
-    ver : objeto
-        Parámetro ver.
+    r : ndarray
+        Imagen de entrada (usualmente uint8).
+    ax : matplotlib.axes.Axes, optional
+        Ejes donde graficar. Si es None, usa gca().
+    ver : bool, optional
+        Si es True, grafica el histograma. Si es False, retorna los valores.
 
     Retorna
     -------
     out : ndarray or None
-        Resultado de imhist.
-
-    Ejemplo
-    -------
-    >>> # uso básico
-    >>> out = imhist(r, ax, ver)
+        Valores del histograma si ver=False, de lo contrario None.
     """
-    h = np.zeros([256, 1])
-    i, j = r.shape
-    for x in range(i):
-        for y in range(j):
-            h[r[x, y]] += 1
+    # Optimización usando numpy
+    h, _ = np.histogram(r.flatten(), bins=256, range=(0, 255))
+    h = h.astype(np.float64)  # 1D array
     
     if ver:
-        x = range(256)
-        hbar = np.reshape(h, 256)
+        x = np.arange(256)
+        hbar = h.ravel()
         if ax is None:
             ax = plt.gca()
-        ax.bar(x, hbar)
-        norm = mpl.colors.Normalize(vmin=0, vmax=255)
-        escala = plt.cm.ScalarMappable(cmap='gray', norm=norm)
-        escala.set_array([])
-        plt.colorbar(escala, ax=ax, orientation="horizontal", ticks=[0, 50, 100, 150, 200, 255])
+        
+        # Color azul específico para que el frontend detecte los bordes
+        ax.bar(x, hbar, width=1.0, color='#106ebe', edgecolor='#106ebe')
+        
         ax.set_xlabel("Intensidades")
         ax.set_ylabel("Frecuencia")
         ax.set_title("Histograma")
         ax.set_xlim(0, 255)
-        ax.set_ylim(0, np.amax(h) * 0.3)
-        ax.grid(True)
+        
+        # Ajuste de escala vertical para mejor visualización
+        h_max = np.amax(h)
+        if h_max > 0:
+            ax.set_ylim(0, h_max * 1.05)
+            
+        ax.grid(True, alpha=0.3, linestyle='--')
+        
+        # Restaurar la barra de sombra inferior (colorbar)
+        import matplotlib as mpl
+        norm = mpl.colors.Normalize(vmin=0, vmax=255)
+        escala = plt.cm.ScalarMappable(cmap='gray', norm=norm)
+        escala.set_array([])
+        # Agregar la barra horizontalmente debajo del histograma
+        plt.colorbar(escala, ax=ax, orientation="horizontal", ticks=[0, 50, 100, 150, 200, 255], pad=0.15)
     else:
         return h
     
@@ -285,81 +285,79 @@ def imhist(r, ax=None, ver=True):
 
                
               
-def stretchlim(I,Tol=0.01):
+def stretchlim(I, Tol=0.01):
     """
-    Estima límites de estiramiento de intensidad.
+    Estima límites de estiramiento de intensidad basándose en percentiles.
 
     Parámetros
     ----------
     I : ndarray
-        Parámetro I.
-    Tol : objeto
-        Parámetro Tol.
+        Imagen de entrada.
+    Tol : float or tuple, optional
+        Fracción de intensidades a saturar en cada extremo. Default 0.01.
 
     Retorna
     -------
-    out : objeto
-        Resultado de stretchlim.
-
-    Ejemplo
-    -------
-    >>> # uso básico
-    >>> out = stretchlim(I, Tol)
+    low_high : tuple
+        Límites normalizados (low, high) en el rango [0, 1].
     """
+    if isinstance(Tol, (list, tuple)):
+        tol_low, tol_high = Tol
+    else:
+        tol_low = Tol
+        tol_high = 1.0 - Tol
+
+    h = imhist(I, ver=False).ravel()
+    cdf = np.cumsum(h) / np.sum(h)
     
-    Em=0
-    EM=255
-    h=imhist(I,None,False)
-    i,j=np.shape(I)
-    ha=np.zeros([256,1])
-    hp=np.zeros([256,1])
-    L=256
-    for k in range(L):
-        ha[k]=np.sum(h[0:k+1])
-        hp[k]=ha[k]/(i*j)
-        if hp[k]<=Tol:
-             Em=k
-        if hp[k]<=1-Tol:
-             EM=k              
-    return Em/255,EM/255    
+    Em = np.searchsorted(cdf, tol_low)
+    EM = np.searchsorted(cdf, tol_high)
+    
+    return float(Em) / 255.0, float(EM) / 255.0
     
 
-def imadjust(I,E,S=(0,1),n=1):
+def imadjust(I, E=(0, 1), S=(0, 1), n=1):
     """
     Ajusta la intensidad de una imagen al estilo MATLAB imadjust.
 
+    Mapea intensidades en el rango [E[0], E[1]] al rango [S[0], S[1]].
+    Valores fuera de [E[0], E[1]] se saturan a S[0] o S[1].
+
     Parámetros
     ----------
     I : ndarray
-        Parámetro I.
-    E : objeto
-        Parámetro E.
-    S : objeto
-        Parámetro S.
-    1) : objeto
-        Parámetro 1).
-    n : objeto
-        Parámetro n.
+        Imagen de entrada. Debería estar en el rango [0, 255].
+    E : tuple, optional
+        Límites de entrada [low_in, high_in], normalizados [0, 1].
+    S : tuple, optional
+        Límites de salida [low_out, high_out], normalizados [0, 1].
+    n : float, optional
+        Factor de corrección gamma. Default 1 (lineal).
 
     Retorna
     -------
-    out : objeto
-        Resultado de imadjust.
-
-    Ejemplo
-    -------
-    >>> # uso básico
-    >>> out = imadjust(I, E, S, 1), n)
+    out : ndarray (uint8)
+        Imagen ajustada.
     """
-    Em=E[0]*255
-    EM=E[1]*255
-    Sm=S[0]*255
-    SM=S[1]*255
-    I=np.float16(I)
-    Is=((SM-Sm)/(EM-Em)**n)*(np.absolute(I-Em))**n+Sm
-    #Ajusta el overflow de los valores
-    Is[np.where(Is>255)] = 255
-    return np.uint8(Is)
+    Em, EM = E
+    Sm, SM = S
+    
+    # Trabajar con floats para precisión
+    I_f = I.astype(np.float64) / 255.0
+    
+    # Normalizar entrada al rango [0, 1] dentro de los límites Em, EM
+    # clipping es esencial para imadjust
+    if EM > Em:
+        I_norm = np.clip((I_f - Em) / (EM - Em), 0, 1)
+    else:
+        # Evitar división por cero
+        I_norm = np.where(I_f >= Em, 1.0, 0.0)
+    
+    # Aplicar transformación gamma y remapear a rango [Sm, SM]
+    Out = Sm + (SM - Sm) * (I_norm ** n)
+    
+    # Convertir de vuelta a uint8 [0, 255]
+    return np.uint8(np.clip(Out * 255.0, 0, 255))
         
         
   
@@ -538,9 +536,9 @@ def rgb2hsv(I):
             elif maximo==r[i,j]:
                 H[i,j]=60*(((g[i,j]-b[i,j])/d[i,j])%6)
             elif maximo==g[i,j]:
-                H[i,j]=60*(((g[i,j]-b[i,j])/d[i,j])+2)
+                H[i,j]=60*(((b[i,j]-r[i,j])/d[i,j])+2)
             elif maximo==b[i,j]:
-                H[i,j]=60*(((g[i,j]-b[i,j])/d[i,j])+4)
+                H[i,j]=60*(((r[i,j]-g[i,j])/d[i,j])+4)
             if maximo==0:
                 S[i,j]=0
             else:
@@ -762,10 +760,12 @@ def xyz2rgb(XYZ):
     ])
 
     var_RGB = np.dot(XYZ, M.T)
-    var_RGB = np.clip(var_RGB, 0, None)  # Asegura que no haya valores negativos
-
+    # var_RGB = np.clip(var_RGB, 0, None)  # Asegura que no haya valores negativos <-- Previously commented or missing? 
+    # Actually, we should NOT clip before Gamma for sRGB standard, but we MUST clip before uint8 cast.
+    
     RGB = evaluar(var_RGB)
-    RGB = (RGB * 255).astype(np.uint8)
+    # CLIP RGB BEFORE CASTING TO UINT8 TO PREVENT WRAP-AROUND (e.g. -5 -> 251)
+    RGB = np.clip(RGB * 255, 0, 255).astype(np.uint8)
 
     return RGB
 
@@ -864,7 +864,9 @@ def lab2xyz(lab):
     Reference = np.array([0.950456, 1.000000, 1.088754])
 
     def evaluar(x):
-        return np.where(x > 0.008856, x ** 3, (x - 16 / 116) / 7.787)
+        # FIX: Threshold for 'x' (which is f(Y/Yn)) must be delta = 6/29 ~= 0.20689, NOT 0.008856.
+        # 0.008856 is delta cubed.
+        return np.where(x > 0.206893, x ** 3, (x - 16 / 116) / 7.787)
 
     L, a, b = lab[..., 0], lab[..., 1], lab[..., 2]
 
@@ -931,7 +933,7 @@ def rgb2ycbcr(RGB):
     
     for i in range(F):
         for j in range(C):
-            rgb_pixel = np.array([RGB_float[i,j,0], RGB_float[i,j,1], RGB_float[i,j,2]])
+            rgb_pixel = np.array([RGB_float[i,j,0], RGB_float[i,j,1], RGB_float[i,j,2]]) / 255.0
             ycbcr_pixel = M @ rgb_pixel + T
             YCBCR[i,j,:] = ycbcr_pixel
     
@@ -986,7 +988,7 @@ def ycbcr2rgb(YCBCR):
     for i in range(F):
         for j in range(C):
             ycbcr_pixel = np.array([YCBCR_float[i,j,0], YCBCR_float[i,j,1], YCBCR_float[i,j,2]])
-            rgb_pixel = M_inv @ (ycbcr_pixel - T)
+            rgb_pixel = (M_inv @ (ycbcr_pixel - T)) * 255.0
             RGB[i,j,:] = rgb_pixel
     
     # Convertir de vuelta a uint8 con clipping
@@ -994,6 +996,192 @@ def ycbcr2rgb(YCBCR):
     
     return RGB
 
+
+# ---------------------------------------------------------------------------
+# ====================================================================
+#  Filtro Bayer / Demosaicing
+# ====================================================================
+
+def _bayer_masks(M, N, pattern='RGGB'):
+    """
+    Genera las tres máscaras booleanas (R, G, B) para un patrón Bayer dado.
+
+    Parámetros
+    ----------
+    M : int
+        Número de filas (debe ser par).
+    N : int
+        Número de columnas (debe ser par).
+    pattern : str
+        Patrón Bayer: 'RGGB' | 'BGGR' | 'GRBG' | 'GBRG'. Por defecto 'RGGB'.
+
+    Retorna
+    -------
+    R_mask, G_mask, B_mask : ndarray bool (M, N)
+    """
+    p = pattern.upper()
+    # Celda 2×2 base
+    cell = {
+        'RGGB': {'R': (0,0), 'G': [(0,1),(1,0)], 'B': (1,1)},
+        'BGGR': {'R': (1,1), 'G': [(0,1),(1,0)], 'B': (0,0)},
+        'GRBG': {'R': (0,1), 'G': [(0,0),(1,1)], 'B': (1,0)},
+        'GBRG': {'R': (1,0), 'G': [(0,0),(1,1)], 'B': (0,1)},
+    }
+    if p not in cell:
+        raise ValueError(f"Patrón Bayer no reconocido: '{pattern}'. Use 'RGGB', 'BGGR', 'GRBG' o 'GBRG'.")
+
+    R_cell = np.zeros((2, 2), dtype=bool)
+    G_cell = np.zeros((2, 2), dtype=bool)
+    B_cell = np.zeros((2, 2), dtype=bool)
+
+    r, c = cell[p]['R']
+    R_cell[r, c] = True
+    for (r2, c2) in cell[p]['G']:
+        G_cell[r2, c2] = True
+    r, c = cell[p]['B']
+    B_cell[r, c] = True
+
+    reps_r = (M + 1) // 2
+    reps_c = (N + 1) // 2
+
+    R_mask = np.tile(R_cell, (reps_r, reps_c))[:M, :N]
+    G_mask = np.tile(G_cell, (reps_r, reps_c))[:M, :N]
+    B_mask = np.tile(B_cell, (reps_r, reps_c))[:M, :N]
+
+    return R_mask, G_mask, B_mask
+
+
+def makebayer(I, pattern='RGGB'):
+    """
+    Simula el Color Filter Array (CFA) de Bayer sobre una imagen RGB.
+
+    Recibe una imagen RGB y retorna una imagen en escala de grises (RAW simulada)
+    donde cada píxel conserva únicamente el canal de color que el filtro Bayer
+    permite pasar en esa posición. Equivalente a ``demosaic`` inverso / ``rgb2bayer``.
+
+    Parámetros
+    ----------
+    I : ndarray
+        Imagen RGB de entrada, MxNx3 (uint8 o float).
+    pattern : str
+        Patrón Bayer: 'RGGB' (por defecto) | 'BGGR' | 'GRBG' | 'GBRG'.
+
+    Retorna
+    -------
+    RAW : ndarray
+        Imagen 2D (M×N) uint8 con el mosaico Bayer aplicado.
+
+    Ejemplo
+    -------
+    >>> I   = imread('peppers.png')
+    >>> RAW = makebayer(I, 'RGGB')
+    >>> imshow(RAW, cmap='gray')
+    """
+    if I.ndim == 2:
+        raise ValueError("makebayer: La imagen debe ser RGB (MxNx3), no en escala de grises.")
+    if I.shape[2] != 3:
+        raise ValueError("makebayer: La imagen debe tener exactamente 3 canales.")
+
+    I = np.asarray(I, dtype=np.float64)
+    M, N = I.shape[:2]
+
+    R_mask, G_mask, B_mask = _bayer_masks(M, N, pattern)
+
+    RAW = (I[:, :, 0] * R_mask +
+           I[:, :, 1] * G_mask +
+           I[:, :, 2] * B_mask)
+
+    return np.clip(RAW, 0, 255).astype(np.uint8)
+
+
+def demosaic(I, sensorAlignment='rggb'):
+    """
+    Reconstruye una imagen RGB completa a partir de una imagen RAW Bayer
+    mediante interpolación bilineal.
+
+    Equivalente a MATLAB ``demosaic(I, sensorAlignment)``.
+
+    Implementa el algoritmo de interpolación bilineal estándar para CFA:
+      - Canal G: interpolado con sus cuatro vecinos inmediatos.
+      - Canal B: dos pasos (diagonales → vecinos de G).
+      - Canal R: dos pasos (diagonales → vecinos de G).
+
+    Parámetros
+    ----------
+    I : ndarray
+        Imagen RAW Bayer. Puede ser:
+        - 2D (M×N): imagen de un solo canal (RAW pura).
+        - 3D (M×N×3): imagen con la máscara ya aplicada canal a canal.
+    sensorAlignment : str
+        Patrón Bayer (alineación del sensor): 'rggb' (por defecto) | 'bggr' | 'grbg' | 'gbrg'.
+        Compatible con la sintaxis MATLAB: demosaic(I, 'rggb').
+
+    Retorna
+    -------
+    RGB : ndarray
+        Imagen reconstruida MxNx3 uint8.
+
+    Ejemplo
+    -------
+    >>> RAW  = makebayer(I_original, 'rggb')
+    >>> Irec = demosaic(RAW, 'rggb')
+    >>> imshow(Irec)
+    """
+    im = np.asarray(I, dtype=np.float64)
+    pattern = sensorAlignment.upper()   # normalizar igual que MATLAB (case-insensitive)
+
+    if im.ndim == 3 and im.shape[2] == 3:
+        M, N = im.shape[:2]
+        R_mask, G_mask, B_mask = _bayer_masks(M, N, pattern)
+        R = im[:, :, 0] * R_mask
+        G = im[:, :, 1] * G_mask
+        B = im[:, :, 2] * B_mask
+    elif im.ndim == 2:
+        M, N = im.shape
+        R_mask, G_mask, B_mask = _bayer_masks(M, N, pattern)
+        R = im * R_mask
+        G = im * G_mask
+        B = im * B_mask
+    else:
+        raise ValueError("demosaic: la entrada debe ser 2D (RAW) o 3D (MxNx3).")
+
+    # Kernels de interpolación
+    K_cross   = np.array([[0, 1, 0],
+                           [1, 0, 1],
+                           [0, 1, 0]], dtype=np.float64) / 4.0
+
+    K_diag    = np.array([[1, 0, 1],
+                           [0, 0, 0],
+                           [1, 0, 1]], dtype=np.float64) / 4.0
+
+    # --- Interpolación del canal G ---
+    G = G + imfilter(G, K_cross, salida='same', tipodepad='symmetric',
+                     method='conv', astype_out='float')
+
+    # --- Interpolación del canal B ---
+    # Paso 1: píxeles B en posiciones R (diagonales)
+    B1 = imfilter(B, K_diag, salida='same', tipodepad='symmetric',
+                  method='conv', astype_out='float')
+    # Paso 2: píxeles B en posiciones G (vecinos de la suma B+B1)
+    B2 = imfilter(B + B1, K_cross, salida='same', tipodepad='symmetric',
+                  method='conv', astype_out='float')
+    B = B + B1 + B2
+
+    # --- Interpolación del canal R ---
+    # Paso 1: píxeles R en posiciones B (diagonales)
+    R1 = imfilter(R, K_diag, salida='same', tipodepad='symmetric',
+                  method='conv', astype_out='float')
+    # Paso 2: píxeles R en posiciones G (vecinos de la suma R+R1)
+    R2 = imfilter(R + R1, K_cross, salida='same', tipodepad='symmetric',
+                  method='conv', astype_out='float')
+    R = R + R1 + R2
+
+    RGB = np.zeros((M, N, 3), dtype=np.float64)
+    RGB[:, :, 0] = R
+    RGB[:, :, 1] = G
+    RGB[:, :, 2] = B
+
+    return np.clip(RGB, 0, 255).astype(np.uint8)
 
 
 # ====================================================================
@@ -1023,246 +1211,323 @@ def imcrop(I, x, y, w, h):
 
 
 
-def imresize(I, S, method='bicubic', extrapval=0.0):
-    """
-    Redimensiona una imagen a un nuevo tamaño o escala.
-
-    Cambio clave: construir Xq,Yq como matrices y llamar interp2 UNA sola vez.
-    """
-    import numpy as np
-
-    # Tamaño original
-    if I.ndim == 2:
-        N, M = I.shape  # N=alto, M=ancho
-    else:
-        N, M, _ = I.shape
-
-    # Factores de escala
-    if np.isscalar(S):
-        Sx = Sy = float(S)
-    elif len(S) == 2:
-        if isinstance(S[0], int) and isinstance(S[1], int):
-            # S=(nuevo_alto, nuevo_ancho)
-            Sy = S[0] / N
-            Sx = S[1] / M
-        else:
-            # S=(factor_x, factor_y)
-            Sx, Sy = float(S[0]), float(S[1])
-    else:
-        raise ValueError("S debe ser escalar o tupla de 2 elementos")
-
-    # Nuevo tamaño (directo y consistente)
-    Np = int(np.ceil(N * Sy))  # nueva altura
-    Mp = int(np.ceil(M * Sx))  # nuevo ancho
-
-    # Malla de salida (0-based) y mapeo inverso (0-based)
-    xp = np.arange(Mp, dtype=float)
-    yp = np.arange(Np, dtype=float)
-    Xp, Yp = np.meshgrid(xp, yp)  # (Np, Mp)
-
-    x = Xp / Sx
-    y = Yp / Sy
-
-    # interp2 usa 1-based (MATLAB)
-    Xq = x + 1.0
-    Yq = y + 1.0
-
-    out = interp2(I, Xq, Yq, method, extrapval)
-    return out.astype(I.dtype)
 
 
 
-def imrotate(I, grados, method='nearest', extrapval=0.0):
-    """
-    Rota una imagen un ángulo dado en grados.
-
-    Cambio clave: construir Xq,Yq como matrices y llamar interp2 UNA sola vez.
-    (Se evita R_inv @ tensor 3D para no tener errores de matmul.)
-    """
-    import numpy as np
-
-    theta = -grados * np.pi / 180.0
-    c = np.cos(theta)
-    s = np.sin(theta)
-
-    # Dimensiones de entrada
-    if I.ndim == 2:
-        M, N = I.shape  # M=alto, N=ancho
-    else:
-        M, N, _ = I.shape
-
-    # Centros (mismo criterio)
-    pcx, pcy = (N / 2.0), (M / 2.0)
-
-    # Tamaño de salida "loose"
-    Np = int(np.ceil(abs(c) * N + abs(s) * M))  # nuevo ancho
-    Mp = int(np.ceil(abs(s) * N + abs(c) * M))  # nueva altura
-
-    pcx_p, pcy_p = (Np / 2.0), (Mp / 2.0)
-
-    # Malla de salida (0-based)
-    xp = np.arange(Np, dtype=float)
-    yp = np.arange(Mp, dtype=float)
-    Xp, Yp = np.meshgrid(xp, yp)  # (Mp, Np)
-
-    # Relativas al centro de salida
-    xr = Xp - pcx_p
-    yr = Yp - pcy_p
-
-    # Mapeo inverso: R_inv = [[c, s], [-s, c]]
-    x = c * xr + s * yr + pcx
-    y = -s * xr + c * yr + pcy
-
-    # interp2 usa 1-based (MATLAB)
-    Xq = x + 1.0
-    Yq = y + 1.0
-
-    out = interp2(I, Xq, Yq, method, extrapval)
-    return out.astype(I.dtype)
 
 
 
-def imtranslate(I, translation, mode='same', method='bilinear', extrapval=0.0):
-    """
-    Traslada una imagen por un vector de desplazamiento.
-
-    Cambio clave: construir Xq,Yq como matrices y llamar interp2 UNA sola vez.
-    """
-    import numpy as np
-
-    if I.ndim == 2:
-        N, M = I.shape
-    else:
-        N, M, _ = I.shape
-
-    tx, ty = float(translation[0]), float(translation[1])
-
-    if mode == 'same':
-        Mp, Np = M, N
-        x_out0 = 0.0
-        y_out0 = 0.0
-    elif mode == 'full':
-        Mp = int(np.ceil(M + abs(tx)))
-        Np = int(np.ceil(N + abs(ty)))
-        x_out0 = 0.0
-        y_out0 = 0.0
-    else:
-        raise ValueError("El modo debe ser 'same' o 'full'")
-
-    # Malla de salida (0-based)
-    xp = np.arange(Mp, dtype=float) + x_out0
-    yp = np.arange(Np, dtype=float) + y_out0
-    Xp, Yp = np.meshgrid(xp, yp)  # (Np, Mp)
-
-    # Mapeo inverso: entrada = salida - t
-    x = Xp - tx
-    y = Yp - ty
-
-    # interp2 usa 1-based (MATLAB)
-    Xq = x + 1.0
-    Yq = y + 1.0
-
-    out = interp2(I, Xq, Yq, method, extrapval)
-    return out.astype(I.dtype)
 
 
 def fitgeotrans(puntos_iniciales, puntos_finales, transformation_type='projective'):
     """
-    Ajusta una transformación geométrica a pares de puntos.
-    (No requiere interpolación: solo estima H.)
+    Estima la matriz de transformación geométrica H que lleva
+    puntos_iniciales → puntos_finales por mínimos cuadrados.
+ 
+    Sintaxis (compatible con llamadas existentes)
+    ─────────────────────────────────────────────
+    H = fitgeotrans(pts_src, pts_dst)
+    H = fitgeotrans(pts_src, pts_dst, 'affine')
+    H = fitgeotrans(pts_src, pts_dst, 'projective')
+    H = fitgeotrans(pts_src, pts_dst, 'nonreflectivesimilarity')
+ 
+    Parámetros
+    ──────────
+    puntos_iniciales : ndarray (N × 2)
+        Coordenadas [x, y] de los puntos de origen  (imagen fuente).
+    puntos_finales   : ndarray (N × 2)
+        Coordenadas [x, y] de los puntos destino    (imagen de referencia).
+    transformation_type : str
+        'affine'                   – 6 parámetros, mínimo 3 pares de puntos.
+                                     Preserva líneas paralelas.
+        'projective'               – 8 parámetros, mínimo 4 pares de puntos.
+                                     Transformación homogénea general.
+        'nonreflectivesimilarity'  – 4 parámetros, mínimo 2 pares de puntos.
+                                     Escala uniforme + rotación + traslación.
+                                     Sin reflexión (útil para registrar imágenes
+                                     ligeramente deformadas).
+
     """
-    import numpy as np
-
-    # Número de puntos
+ 
+    puntos_iniciales = np.asarray(puntos_iniciales, dtype=float)
+    puntos_finales   = np.asarray(puntos_finales,   dtype=float)
+ 
+    # ── Validación del número mínimo de puntos ────────────────────────────────
+    # Antes de esta versión, un número insuficiente de puntos producía un error
+    # críptico de numpy (sistema subdeterminado). Ahora se da un mensaje claro.
+    minimos = {
+        'nonreflectivesimilarity': 2,
+        'affine':                  3,
+        'projective':              4,
+    }
+ 
+    tipo = transformation_type.lower().strip()
+ 
+    if tipo not in minimos:
+        raise ValueError(
+            f"transformation_type='{transformation_type}' no reconocido.\n"
+            f"Opciones: 'affine', 'projective', 'nonreflectivesimilarity'."
+        )
+ 
     n = puntos_iniciales.shape[0]
-    
-    if transformation_type == 'affine':
-        num_params = 6
-        A = np.zeros((2 * n, num_params))
+ 
+    if n < minimos[tipo]:
+        raise ValueError(
+            f"'{tipo}' necesita al menos {minimos[tipo]} pares de puntos; "
+            f"se recibieron {n}."
+        )
+ 
+    # ── Tipo: afinidad (6 parámetros) ────────────────────────────────────────
+    # Modelo:  x' = a·x + b·y + c
+    #          y' = d·x + e·y + f
+    # Número mínimo de pares: 3  (sistema 6×6 exactamente determinado)
+    if tipo == 'affine':
+        A = np.zeros((2 * n, 6))
         b = np.zeros(2 * n)
-        
+ 
         for i in range(n):
-            x, y = puntos_iniciales[i]
+            x,       y       = puntos_iniciales[i]
             x_prime, y_prime = puntos_finales[i]
-            A[2*i, :] = [x, y, 1, 0, 0, 0]
-            b[2*i] = x_prime
-            A[2*i+1, :] = [0, 0, 0, x, y, 1]
-            b[2*i+1] = y_prime
-        
+ 
+            # Fila para x':  [x  y  1  0  0  0] · h = x'
+            A[2*i,     :] = [x, y, 1, 0, 0, 0]
+            b[2*i]        = x_prime
+ 
+            # Fila para y':  [0  0  0  x  y  1] · h = y'
+            A[2*i + 1, :] = [0, 0, 0, x, y, 1]
+            b[2*i + 1]    = y_prime
+ 
         h = np.linalg.lstsq(A, b, rcond=None)[0]
-        H = np.array([[h[0], h[1], h[2]], 
-                      [h[3], h[4], h[5]], 
-                      [0, 0, 1]])
-
-    elif transformation_type == 'projective':
-        num_params = 8
-        A = np.zeros((2 * n, num_params))
+ 
+        H = np.array([[h[0], h[1], h[2]],
+                      [h[3], h[4], h[5]],
+                      [0,    0,    1   ]])
+ 
+    # ── Tipo: proyectiva (8 parámetros) ──────────────────────────────────────
+    # Modelo homogéneo:  [x'] = H · [x]   con  H[2,2] = 1  (normalizado)
+    #                    [y']       [y]
+    #                    [w']       [1]
+    # Expansión:
+    #    x'/w' = (h00·x + h01·y + h02) / (h20·x + h21·y + 1)
+    #    y'/w' = (h10·x + h11·y + h12) / (h20·x + h21·y + 1)
+    # Reorganizando para sistema lineal en 8 incógnitas:
+    #    h00·x + h01·y + h02 - h20·x·x' - h21·y·x' = x'
+    #    h10·x + h11·y + h12 - h20·x·y' - h21·y·y' = y'
+    # Número mínimo de pares: 4
+    elif tipo == 'projective':
+        A = np.zeros((2 * n, 8))
         b = np.zeros(2 * n)
-        
+ 
         for i in range(n):
-            x, y = puntos_iniciales[i]
+            x,       y       = puntos_iniciales[i]
             x_prime, y_prime = puntos_finales[i]
-            A[2*i, :] = [x, y, 1, 0, 0, 0, -x_prime * x, -x_prime * y]
-            b[2*i] = x_prime
-            A[2*i+1, :] = [0, 0, 0, x, y, 1, -y_prime * x, -y_prime * y]
-            b[2*i+1] = y_prime
-        
+ 
+            A[2*i,     :] = [x, y, 1, 0, 0, 0, -x_prime * x, -x_prime * y]
+            b[2*i]        = x_prime
+ 
+            A[2*i + 1, :] = [0, 0, 0, x, y, 1, -y_prime * x, -y_prime * y]
+            b[2*i + 1]    = y_prime
+ 
         h = np.linalg.lstsq(A, b, rcond=None)[0]
-        H = np.array([[h[0], h[1], h[2]], 
-                      [h[3], h[4], h[5]], 
-                      [h[6], h[7], 1]])
-
-    else:
-        raise ValueError("Tipo de transformación no soportado. Use 'affine' o 'projective'.")
-    
+ 
+        H = np.array([[h[0], h[1], h[2]],
+                      [h[3], h[4], h[5]],
+                      [h[6], h[7], 1   ]])
+ 
+    # ── Tipo: similitud sin reflexión (4 parámetros) ─────────────────────────
+    # Modelo:  x' = a·x  - b·y + tx
+    #          y' = b·x  + a·y + ty
+    # donde  a = s·cos(θ),  b = s·sin(θ),  s = escala,  θ = ángulo de rotación
+    #
+    # Interpretación educativa:
+    #   La imagen se escala uniformemente (factor s) y rota θ grados,
+    #   sin voltearla (sin reflexión). Útil para registrar imágenes con
+    #   pequeñas deformaciones de escala y rotación.
+    #
+    # Sistema lineal en [a, b, tx, ty]:
+    #   [ x  -y  1  0 ] [a ]   [x']
+    #   [ y   x  0  1 ] [b ] = [y']
+    #                   [tx]
+    #                   [ty]
+    # Número mínimo de pares: 2  (sistema 4×4 exactamente determinado)
+    elif tipo == 'nonreflectivesimilarity':
+        A = np.zeros((2 * n, 4))
+        b = np.zeros(2 * n)
+ 
+        for i in range(n):
+            x,       y       = puntos_iniciales[i]
+            x_prime, y_prime = puntos_finales[i]
+ 
+            A[2*i,     :] = [ x, -y, 1, 0]
+            b[2*i]        = x_prime
+ 
+            A[2*i + 1, :] = [ y,  x, 0, 1]
+            b[2*i + 1]    = y_prime
+ 
+        h = np.linalg.lstsq(A, b, rcond=None)[0]
+        a, b_coef, tx, ty = h
+ 
+        # Escala y ángulo recuperables si se necesitan (solo informativo):
+        #   escala = sqrt(a² + b²)
+        #   angulo = atan2(b, a)  en radianes
+ 
+        H = np.array([[ a,      -b_coef, tx],
+                      [ b_coef,  a,      ty],
+                      [ 0,       0,       1]])
+ 
     return H
-
-
-
-
-def imwarp(I, H, method='bilinear', extrapval=0.0):
+ 
+ 
+# ─────────────────────────────────────────────────────────────────────────────
+ 
+def imwarp(I, H, method='bilinear', extrapval=0.0, output_size=None):
     """
     Aplica una transformación geométrica homogénea a una imagen.
-
-    Cambio clave: construir Xq,Yq como matrices y llamar interp2 UNA sola vez.
-    (Se evita H_inv @ tensor 3D; se usa forma cerrada con den.)
+ 
+    Sintaxis (compatible con llamadas existentes)
+    ─────────────────────────────────────────────
+    B = imwarp(I, H)
+    B = imwarp(I, H, 'bicubic')
+    B = imwarp(I, H, 'bilinear', 128)
+    B = imwarp(I, H, output_size=(filas, cols))      ← NUEVO (opcional)
+ 
+    Parámetros
+    ──────────
+    I           : ndarray (H×W) o (H×W×C)
+        Imagen de entrada en escala de grises o color.
+    H           : ndarray (3×3)
+        Matriz de transformación homogénea.
+        Convención VECTOR-COLUMNA:  p' = H @ p
+        (ver nota de compatibilidad con MATLAB más abajo)
+    method      : str
+        Método de interpolación: 'nearest' | 'bilinear' | 'bicubic'.
+        Default: 'bilinear'.
+    extrapval   : float
+        Valor de relleno para píxeles fuera de la imagen fuente.
+        Default: 0.0.
+    output_size : tuple (filas, cols) o None
+        [PARÁMETRO NUEVO — no rompe llamadas anteriores]
+        Si se especifica, la imagen de salida tendrá exactamente ese tamaño.
+        La malla de salida siempre comienza en la coordenada 1-based (1,1).
+        Caso típico: output_size=(I.shape[0], I.shape[1]) produce una salida
+        del mismo tamaño que la entrada — análogo a usar imref2d(size(I)) en MATLAB.
+        Si es None (default), se calcula el bounding box de las esquinas
+        transformadas, igual que en versiones anteriores.
+ 
+    Retorna
+    ───────
+    out : ndarray — mismo dtype que I
+ 
+    ⚠️  DIFERENCIA CON MATLAB
+    ─────────────────────────
+    Esta función usa convención VECTOR-COLUMNA: p' = H @ p
+    MATLAB usa convención VECTOR-FILA:  [x' y' 1] = [x y 1] · tform.T
+ 
+    fitgeotrans e imwarp de esta librería son internamente consistentes,
+    así que el flujo normal funciona sin conversión:
+        H = fitgeotrans(pts_src, pts_dst, 'projective')
+        B = imwarp(A, H)                          ← correcto
+ 
+    Ejemplos de uso equivalente a MATLAB
+    ─────────────────────────────────────
+    MATLAB:   B = imwarp(A, tform);
+    Aquí:     B = imwarp(A, H)
+ 
+    MATLAB:   B = imwarp(A, tform, 'OutputView', imref2d(size(A)));
+    Aquí:     B = imwarp(A, H, output_size=(A.shape[0], A.shape[1]))
+ 
+    MATLAB:   B = imwarp(A, tform, 'FillValues', 128);
+    Aquí:     B = imwarp(A, H, extrapval=128)
     """
-    import numpy as np
-
-    # Dimensiones entrada
+ 
+    # ── Dimensiones de la imagen de entrada ──────────────────────────────────
     if I.ndim == 2:
         N, M = I.shape
     else:
         N, M, _ = I.shape
-
-    # Esquinas en 1-based (como su versión original)
-    corners = np.array([
-        [1, 1, 1],
-        [M, 1, 1],
-        [1, N, 1],
-        [M, N, 1]
-    ], dtype=float).T
-
-    tc = H @ corners
-    tc /= tc[2, :]
-
-    x_min, y_min = np.min(tc[:2, :], axis=1)
-    x_max, y_max = np.max(tc[:2, :], axis=1)
-
-    Np = int(np.ceil(y_max - y_min + 1))
-    Mp = int(np.ceil(x_max - x_min + 1))
-
-    # Malla de salida en coordenadas 1-based del plano destino
+ 
+    # ── Determinar el tamaño y origen de la malla de salida ──────────────────
+    if output_size is not None:
+        # Modo nuevo: tamaño fijo especificado por el usuario.
+        # La malla de salida ocupa exactamente (filas × cols) píxeles,
+        # comenzando en la coordenada 1-based (1, 1).
+        Np = int(output_size[0])
+        Mp = int(output_size[1])
+        x_min = 1.0
+        y_min = 1.0
+ 
+    else:
+        # Modo original (comportamiento idéntico al de versiones anteriores):
+        # Se transforman las cuatro esquinas para calcular el bounding box.
+        # Coordenadas 1-based (convención MATLAB) de las esquinas.
+        corners = np.array([
+            [1, 1, 1],
+            [M, 1, 1],
+            [1, N, 1],
+            [M, N, 1]
+        ], dtype=float).T          # forma (3, 4)
+ 
+        tc = H @ corners           # forma (3, 4)
+ 
+        # ── Guarda nueva: esquinas en el plano de fuga ────────────────────────
+        # En transformaciones proyectivas extremas, alguna esquina puede mapear
+        # al "horizonte" donde  tc[2] ≈ 0 , lo que produce coordenadas infinitas
+        # y un bounding box descomunal (MemoryError silencioso).
+        # Solución: ignorar esquinas cuyo denominador sea casi cero y solo usar
+        # las que tienen coordenadas finitas para calcular el bounding box.
+        denominadores = np.abs(tc[2, :])
+        esquinas_validas = denominadores > 1e-8
+ 
+        if not np.any(esquinas_validas):
+            # Ninguna esquina es válida → no se puede determinar el bbox.
+            raise ValueError(
+                "imwarp: la transformación H proyecta todas las esquinas de la "
+                "imagen al plano de fuga (denominador ≈ 0). "
+                "Verifica que H sea una homografía válida para esta imagen."
+            )
+ 
+        # Solo dividir las esquinas válidas
+        tc_validas = tc[:, esquinas_validas]
+        tc_validas = tc_validas / tc_validas[2, :]   # normalización homogénea
+ 
+        x_min = float(np.min(tc_validas[0, :]))
+        y_min = float(np.min(tc_validas[1, :]))
+        x_max = float(np.max(tc_validas[0, :]))
+        y_max = float(np.max(tc_validas[1, :]))
+ 
+        Np = int(np.ceil(y_max - y_min + 1))
+        Mp = int(np.ceil(x_max - x_min + 1))
+ 
+    # ── Malla de salida en coordenadas 1-based del plano destino ─────────────
+    # Cada píxel (col, fila) en la imagen de salida tiene coordenadas:
+    #   x = x_min + col_idx   (dirección horizontal)
+    #   y = y_min + row_idx   (dirección vertical)
     x_out = x_min + np.arange(Mp, dtype=float)
     y_out = y_min + np.arange(Np, dtype=float)
-    Xp, Yp = np.meshgrid(x_out, y_out)  # (Np, Mp)
-
+    Xp, Yp = np.meshgrid(x_out, y_out)   # forma (Np, Mp)
+ 
+    # ── Backward mapping ─────────────────────────────────────────────────────
+    # Para cada píxel (Xp, Yp) en la salida, calculamos con H⁻¹ a qué
+    # coordenada (Xq, Yq) de la imagen de ENTRADA corresponde,
+    # luego interpolamos el valor.
     H_inv = np.linalg.inv(H)
-
-    den = H_inv[2,0]*Xp + H_inv[2,1]*Yp + H_inv[2,2]
-    Xq  = (H_inv[0,0]*Xp + H_inv[0,1]*Yp + H_inv[0,2]) / den
-    Yq  = (H_inv[1,0]*Xp + H_inv[1,1]*Yp + H_inv[1,2]) / den
-
+ 
+    # Denominador de la transformación proyectiva inversa
+    den = H_inv[2, 0]*Xp + H_inv[2, 1]*Yp + H_inv[2, 2]
+ 
+    # Evitar división por cero (píxeles en el plano de fuga inverso)
+    valid_den = np.abs(den) > 1e-12
+    den_safe  = np.where(valid_den, den, 1.0)
+ 
+    Xq = (H_inv[0, 0]*Xp + H_inv[0, 1]*Yp + H_inv[0, 2]) / den_safe
+    Yq = (H_inv[1, 0]*Xp + H_inv[1, 1]*Yp + H_inv[1, 2]) / den_safe
+ 
+    # Los píxeles con denominador inválido se mandan fuera del rango
+    # para que interp2 los rellene con extrapval automáticamente.
+    Xq[~valid_den] = -1000.0
+    Yq[~valid_den] = -1000.0
+ 
+    # ── Interpolación y retorno ───────────────────────────────────────────────
     out = interp2(I, Xq, Yq, method, extrapval)
     return out.astype(I.dtype)
 
@@ -2197,46 +2462,39 @@ def imclose(Ibin, SE, pad=0):
 
 def otsuthresh(h):
     """
-    Función otsuthresh de la librería de procesamiento de imágenes.
-
-    Parámetros
-    ----------
-    h : objeto
-        Parámetro h.
-
-    Retorna
-    -------
-    out : float
-        Resultado de otsuthresh.
-
-    Ejemplo
-    -------
-    >>> # uso básico
-    >>> out = otsuthresh(h)
+    Función otsuthresh robusta (estilo MATLAB).
+    h debe ser un histograma 1D de 256 elementos.
     """
-    lh=len(h)
-    tam=np.sum(h)
-    maxV=0
+    h = np.asarray(h).ravel()
+    tam = np.sum(h)
+    if tam == 0: return 0.0
     
-    for T in np.arange(0,lh,1):
-         Wb=np.sum(h[0:T])/tam
-         Acub=np.sum(h[0:T])
-         Acuf=np.sum(h[T+1:lh])
-         if  Acub==0:
-             Ub=0
-         else:
-             Ub=np.dot(np.arange(0,T,1),h[0:T])/Acub
-         if Acuf==0:
-             Uf=0
-         else:
-             Uf=np.dot(np.arange(T+1,lh,1),h[T+1:lh])/Acuf
-         Wf=1-Wb
-         BCV=Wb*Wf*(Ub-Uf)**2;
-         
-         if BCV>=maxV:
-                maxV=BCV
-                umbral=(T+1)/255
-    return umbral
+    # Probabilidades normalizadas
+    p = h / tam
+    
+    # Suma acumulativa y suma acumulativa ponderada (intensidades)
+    omega = np.cumsum(p)
+    mu = np.cumsum(p * np.arange(256))
+    
+    # Media global
+    mu_t = mu[-1]
+    
+    # Evitar división por cero
+    idx = (omega > 0) & (omega < 1)
+    
+    # Varianza entre-clases: BCV = (mu_t * omega - mu)^2 / (omega * (1 - omega))
+    sigma_b_squared = np.zeros(256)
+    sigma_b_squared[idx] = (mu_t * omega[idx] - mu[idx])**2 / (omega[idx] * (1 - omega[idx]))
+    
+    # Encontrar el índice del máximo
+    max_val = np.max(sigma_b_squared)
+    idx_max = np.where(sigma_b_squared == max_val)[0]
+    
+    # Si hay múltiples máximos, tomar el promedio
+    T = np.mean(idx_max)
+    
+    # Retornar umbral normalizado [0, 1]
+    return float(T / 255.0)
 
 
     
@@ -2298,34 +2556,44 @@ def adaptthresh(I, P=None, V=None):
     if P is None:
         P = S
 
-    # Parámetros de la ventana
+    # Tx, Ty son las dimensiones de la ventana
     Tx, Ty = V
-    Finix = (Tx + 1) // 2
-    Ciniy = (Ty + 1) // 2
-    Ffinx = Finix - 1
-    Cfiny = Ciniy - 1
-
-    # Preparar la imagen con padarray replicado
-    Io = I.copy()
-    I_padded = np.pad(Io, ((Ffinx, Ffinx), (Cfiny, Cfiny)), mode='edge')
-    F, C = Io.shape
-    T = np.zeros((F, C))
-
-    # Calcular el umbral local
-    for i in range(Finix, F - Ffinx):
-        for j in range(Ciniy, C - Cfiny):
-            # Definir límites del vecindario
-            start_i = i - Ffinx
-            end_i = i + Ffinx + 1
-            start_j = j - Cfiny
-            end_j = j + Cfiny + 1
-
-            # Extraer el vecindario y calcular el umbral local
-            W = I_padded[start_i:end_i, start_j:end_j]
-            T[i, j] = np.mean(W) * (1 - P)  # Aplicar la sensibilidad P al cálculo del umbral
-
-
-    return T/255
+    
+    # Asegurar que las dimensiones de la ventana sean impares
+    Tx = int(Tx) if int(Tx) % 2 != 0 else int(Tx) + 1
+    Ty = int(Ty) if int(Ty) % 2 != 0 else int(Ty) + 1
+    
+    r = (Tx - 1) // 2
+    c = (Ty - 1) // 2
+    
+    # Implementación eficiente usando Integral Image (O(N*M))
+    # Padding replicando bordes
+    I_padded = np.pad(I.astype(np.float64), ((r+1, r+1), (c+1, c+1)), mode='edge')
+    
+    # Calcular Integral Image
+    S = np.cumsum(np.cumsum(I_padded, axis=0), axis=1)
+    
+    # Calcular media local en cada punto (i, j)
+    # El vecindario de (i, j) en I corresponde a una ventana en I_padded
+    # que va de [i, i+2r] y [j, j+2c]
+    # Usando la fórmula de Integral Image: Sum = S(i2,j2) - S(i1-1,j2) - S(i2,j1-1) + S(i1-1,j1-1)
+    
+    # Recorte para las dimensiones originales
+    i2, j2 = np.arange(I.shape[0]) + 2*r + 1, np.arange(I.shape[1]) + 2*c + 1
+    i1, j1 = np.arange(I.shape[0]), np.arange(I.shape[1])
+    
+    # Malla de índices
+    I2, J2 = np.meshgrid(i2, j2, indexing='ij')
+    I1, J1 = np.meshgrid(i1, j1, indexing='ij')
+    
+    # Suma local
+    LocalSum = S[I2, J2] - S[I1, J2] - S[I2, J1] + S[I1, J1]
+    LocalMean = LocalSum / (Tx * Ty)
+    
+    # Aplicar sensibilidad P (similar a MATLAB: T = mean * (1 - P))
+    Threshold = LocalMean * (1.0 - float(P))
+    
+    return Threshold / 255.0
 
 
 
@@ -3210,7 +3478,7 @@ def houghpeaks(H, numpeaks, *, Threshold=None, NHoodSize=None):
     
     
     
-import numpy as np
+
 
 def houghlines(BW, theta, rho, picos, FillGap=20, MinLength=40):
     """
@@ -4725,7 +4993,7 @@ def _detectar_cruces_cero(I):
                 BW[i, j] = True
     
     return BW
-import numpy as np
+
 
 # ------------------------------------------------------------
 # Utilidad: primera dimensión no trivial (MATLAB-compatible)
@@ -5416,7 +5684,7 @@ def roipoly(I_or_m, c_or_n=None, r_or_c=None, r=None, return_coords=False):
 
         # 2a) Modo interactivo: roipoly(I)
         if c_or_n is None and r_or_c is None:
-            import matplotlib.pyplot as plt
+           
 
             fig, ax = plt.subplots()
             # Si la imagen es color, mostrarla tal cual; si es 2D, usar gray.
@@ -5591,8 +5859,6 @@ def roifilt2(h_or_I, I_or_BW, BW_or_fun, fun=None):
 #     Transformada de Radon 
 #-----------------------------------------------
 
-
-import numpy as np
 
 def radon(I, theta=None, method='linear', extrapval=0.0, normalize=False):
     """
@@ -5923,10 +6189,13 @@ def interp2(V, Xq, Yq, method='linear', extrapval=0.0):
 
 def _interp2_nearest(V, x, y, extrapval):
     H, W = V.shape[:2]
-    xi = np.rint(x).astype(int)
-    yi = np.rint(y).astype(int)
+    valid_f = np.isfinite(x) & np.isfinite(y) & (x >= -2) & (x <= W + 2) & (y >= -2) & (y <= H + 2)
+    xi = np.zeros_like(x, dtype=int)
+    yi = np.zeros_like(y, dtype=int)
+    xi[valid_f] = np.rint(x[valid_f]).astype(int)
+    yi[valid_f] = np.rint(y[valid_f]).astype(int)
 
-    valid = (xi >= 0) & (xi < W) & (yi >= 0) & (yi < H)
+    valid = valid_f & (xi >= 0) & (xi < W) & (yi >= 0) & (yi < H)
 
     if V.ndim == 2:
         out = np.full(x.shape, extrapval, dtype=float)
@@ -5942,12 +6211,15 @@ def _interp2_nearest(V, x, y, extrapval):
 def _interp2_bilinear(V, x, y, extrapval):
     H, W = V.shape[:2]
 
-    x0 = np.floor(x).astype(int)
-    y0 = np.floor(y).astype(int)
+    valid_f = np.isfinite(x) & np.isfinite(y) & (x >= -2) & (x <= W + 2) & (y >= -2) & (y <= H + 2)
+    x0 = np.zeros_like(x, dtype=int)
+    y0 = np.zeros_like(y, dtype=int)
+    x0[valid_f] = np.floor(x[valid_f]).astype(int)
+    y0[valid_f] = np.floor(y[valid_f]).astype(int)
     x1 = x0 + 1
     y1 = y0 + 1
 
-    valid = (x0 >= 0) & (x1 < W) & (y0 >= 0) & (y1 < H)
+    valid = valid_f & (x0 >= 0) & (x1 < W) & (y0 >= 0) & (y1 < H)
 
     wx = x - x0
     wy = y - y0
@@ -6003,31 +6275,37 @@ def _interp2_bicubic(V, x, y, extrapval):
     """
     H, W = V.shape[:2]
 
-    x0 = np.floor(x).astype(int)
-    y0 = np.floor(y).astype(int)
+    valid_f = np.isfinite(x) & np.isfinite(y) & (x >= -5) & (x <= W + 5) & (y >= -5) & (y <= H + 5)
+    x0 = np.zeros_like(x, dtype=int)
+    y0 = np.zeros_like(y, dtype=int)
+    x0[valid_f] = np.floor(x[valid_f]).astype(int)
+    y0[valid_f] = np.floor(y[valid_f]).astype(int)
+    dx = x - x0
+    dy = y - y0
 
     # Para bicúbica se requieren vecinos x0-1..x0+2 y y0-1..y0+2
-    valid = (x0-1 >= 0) & (x0+2 < W) & (y0-1 >= 0) & (y0+2 < H)
+    valid = valid_f & (x0-1 >= 0) & (x0+2 < W) & (y0-1 >= 0) & (y0+2 < H)
 
     if V.ndim == 2:
         out = np.full(x.shape, extrapval, dtype=float)
         if not np.any(valid):
             return out
 
-        dx = x - x0
-        dy = y - y0
-
-        acc = np.zeros_like(x, dtype=float)
+        dx_v = dx[valid]
+        dy_v = dy[valid]
+        y0_v = y0[valid]
+        x0_v = x0[valid]
+        acc_v = np.zeros(np.count_nonzero(valid), dtype=float)
 
         for j in range(-1, 3):
-            wy = _cubic_w(dy - j)
-            yj = y0 + j
+            wy = _cubic_w(dy_v - j)
+            yj = y0_v + j
             for i in range(-1, 3):
-                wx = _cubic_w(dx - i)
-                xi = x0 + i
-                acc += (wx * wy) * V[yj, xi]
+                wx = _cubic_w(dx_v - i)
+                xi = x0_v + i
+                acc_v += (wx * wy) * V[yj, xi]
 
-        out[valid] = acc[valid]
+        out[valid] = acc_v
         return out
 
     C = V.shape[2]
@@ -6035,21 +6313,22 @@ def _interp2_bicubic(V, x, y, extrapval):
     if not np.any(valid):
         return out
 
-    dx = x - x0
-    dy = y - y0
-
-    acc = np.zeros((*x.shape, C), dtype=float)
+    dx_v = dx[valid]
+    dy_v = dy[valid]
+    y0_v = y0[valid]
+    x0_v = x0[valid]
+    acc_v = np.zeros((np.count_nonzero(valid), C), dtype=float)
 
     for j in range(-1, 3):
-        wy = _cubic_w(dy - j)
-        yj = y0 + j
+        wy = _cubic_w(dy_v - j)
+        yj = y0_v + j
         for i in range(-1, 3):
-            wx = _cubic_w(dx - i)
-            xi = x0 + i
+            wx = _cubic_w(dx_v - i)
+            xi = x0_v + i
             w = (wx * wy)[..., None]
-            acc += w * V[yj, xi, :]
+            acc_v += w * V[yj, xi, :]
 
-    out[valid, :] = acc[valid, :]
+    out[valid, :] = acc_v
     return out
 
 
@@ -6132,3 +6411,363 @@ def phantom(n: int = 256) -> np.ndarray:
         I[mask] += amp
     
     return I
+
+# ====================================================================
+#  Transformaciones Geométricas Afines
+# ====================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  imrotate
+# ─────────────────────────────────────────────────────────────────────────────
+ 
+def imrotate(I, grados, bbox='loose'):
+    """
+    Rota una imagen usando backward mapping (vecino más próximo).
+    Solo NumPy, sin librerías externas.
+ 
+    Parámetros
+    ──────────
+    I      : ndarray — imagen 2D (escala de grises) o 3D (color RGB)
+    grados : float   — ángulo en grados.
+                       Positivo → rotación antihoraria (como MATLAB).
+    bbox   : str     — 'loose' expande el lienzo para mostrar toda la imagen.
+                       'crop'  mantiene el mismo tamaño que la entrada
+                               (se recortan las esquinas que quedan fuera).
+                       Default: 'loose'
+
+ 
+    Retorna
+    ───────
+    I_rotada : ndarray — mismo dtype que I.
+
+    """
+ 
+    # ── Dimensiones de la imagen de entrada ──────────────────────────────────
+    if I.ndim == 2:
+        n_filas, n_cols = I.shape
+        n_canales = 1
+    else:
+        n_filas, n_cols, n_canales = I.shape
+ 
+    # ── Ángulo de rotación ────────────────────────────────────────────────────
+    # theta es negativo porque en imágenes el eje Y apunta hacia ABAJO,
+    # lo que invierte el sentido de la rotación respecto a coordenadas
+    # matemáticas estándar (donde Y apunta arriba).
+    theta = -grados * np.pi / 180.0
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+ 
+    # ── Matriz de rotación 2×2 ────────────────────────────────────────────────
+    # R rota un vector [x, y] un ángulo theta.
+    R = np.array([
+        [ cos_t, -sin_t],
+        [ sin_t,  cos_t]
+    ])
+ 
+    # La inversa de una matriz de rotación es su traspuesta.
+    # Propiedad de matrices ortogonales: R⁻¹ = Rᵀ
+    R_inv = R.T
+ 
+    # ── Tamaño de la imagen de salida ─────────────────────────────────────────
+    cos_a = np.abs(cos_t)
+    sin_a = np.abs(sin_t)
+ 
+    if bbox == 'loose':
+        # El bounding box del rectángulo original después de rotar:
+        # Cada lado contribuye a la nueva dimensión con su proyección
+        # a través del ángulo de rotación (valores absolutos).
+        nuevo_ancho  = cos_a * n_cols + sin_a * n_filas
+        nueva_altura = sin_a * n_cols + cos_a * n_filas
+        nuevos_cols  = int(np.ceil(nuevo_ancho))
+        nuevas_filas = int(np.ceil(nueva_altura))
+ 
+    elif bbox == 'crop':
+        nuevos_cols  = n_cols    # mismo ancho que la entrada
+        nuevas_filas = n_filas   # mismo alto que la entrada
+ 
+    else:
+        raise ValueError("bbox debe ser 'loose' o 'crop'.")
+ 
+    # ── Centros de imagen original y rotada ───────────────────────────────────
+    # Coordenadas en (x, y) = (columna, fila).
+    cx_orig = n_cols  / 2.0
+    cy_orig = n_filas / 2.0
+    cx_rot  = nuevos_cols  / 2.0
+    cy_rot  = nuevas_filas / 2.0
+ 
+    # ── Imagen de salida inicializada a ceros ─────────────────────────────────
+    if n_canales == 1:
+        I_rotada = np.zeros((nuevas_filas, nuevos_cols), dtype=I.dtype)
+    else:
+        I_rotada = np.zeros((nuevas_filas, nuevos_cols, n_canales), dtype=I.dtype)
+ 
+    # ── Backward mapping ──────────────────────────────────────────────────────
+    for yp in range(nuevas_filas):       # yp: fila en imagen de salida
+        for xp in range(nuevos_cols):    # xp: columna en imagen de salida
+ 
+            # Paso 1: posición relativa al centro de la imagen de SALIDA
+            rel_xp = xp - cx_rot
+            rel_yp = yp - cy_rot
+ 
+            # Paso 2: aplicar rotación inversa (deshace la rotación)
+            rel_x = R_inv[0, 0] * rel_xp + R_inv[0, 1] * rel_yp
+            rel_y = R_inv[1, 0] * rel_xp + R_inv[1, 1] * rel_yp
+ 
+            # Paso 3: trasladar al sistema de coordenadas de la imagen ORIGINAL
+            x = rel_x + cx_orig    # columna en imagen original
+            y = rel_y + cy_orig    # fila en imagen original
+ 
+            # Paso 4: nearest neighbor
+            xi = int(np.round(x))
+            yi = int(np.round(y))
+ 
+            if 0 <= xi < n_cols and 0 <= yi < n_filas:
+                if n_canales == 1:
+                    I_rotada[yp, xp] = I[yi, xi]
+                else:
+                    I_rotada[yp, xp, :] = I[yi, xi, :]
+ 
+    return I_rotada
+ 
+ 
+# ─────────────────────────────────────────────────────────────────────────────
+#  imcrop
+# ─────────────────────────────────────────────────────────────────────────────
+ 
+def imcrop(I, rect):
+    """
+    Recorta una región rectangular de la imagen.
+
+    Sintaxis (idéntica a MATLAB)
+    ────────────────────────────
+    J = imcrop(I, rect)
+    rect = [x, y, w, h]
+
+    Parámetros
+    ──────────
+    I    : ndarray — imagen 2D (grises) o 3D (color)
+    rect : array-like de 4 elementos [x, y, w, h]
+        x : columna inicial del recorte (0-based, borde izquierdo)
+        y : fila inicial del recorte    (0-based, borde superior)
+        w : ancho del recorte en píxeles
+        h : alto  del recorte en píxeles
+
+    Retorna
+    ───────
+    J : ndarray — subimagen de tamaño (h, w) o (h, w, C), mismo dtype que I.
+
+
+
+    Ejemplos
+    ────────
+    # Recortar región de 80 cols × 50 filas desde la posición (10, 20)
+    J = imcrop(I, [10, 20, 80, 50])
+    # Equivale a: I[20:70, 10:90]
+
+    # MATLAB equivalente:
+    # J = imcrop(I, [11, 21, 80, 50])  ← mismo recorte, base-1
+    """
+    x, y, w, h = int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3])
+
+    if I.ndim not in [2, 3]:
+        raise ValueError("La imagen debe ser 2D (grises) o 3D (color).")
+
+    altura, ancho = I.shape[:2]
+
+    if x < 0 or y < 0 or x + w > ancho or y + h > altura:
+        raise ValueError(
+            f"El recorte [x={x}, y={y}, w={w}, h={h}] "
+            f"está fuera de los límites de la imagen ({altura}×{ancho})."
+        )
+
+    if I.ndim == 2:
+        return I[y:y + h, x:x + w]
+    else:
+        return I[y:y + h, x:x + w, :]
+ 
+# ─────────────────────────────────────────────────────────────────────────────
+#  imresize
+# ─────────────────────────────────────────────────────────────────────────────
+ 
+def imresize(I, S):
+    """
+    Redimensiona una imagen usando backward mapping (vecino más próximo).
+    Solo NumPy, sin librerías externas.
+ 
+    Parámetros
+    ──────────
+    I : ndarray — imagen 2D (grises) o 3D (color)
+    S : escalar  → factor de escala uniforme (ambas dimensiones).
+                   Ejemplo: S=0.5 reduce a la mitad; S=2 duplica.
+        tupla de 2 ints   → (nueva_altura, nuevo_ancho) en píxeles.
+                   Ejemplo: S=(200, 300)
+        tupla de 2 floats → (factor_y, factor_x) distintos por eje.
+                   Ejemplo: S=(2.0, 1.5)
+ 
+    Retorna
+    ───────
+    Ip : ndarray — imagen redimensionada, mismo dtype que I.
+ 
+
+    """
+ 
+    # ── Dimensiones de la imagen de entrada ──────────────────────────────────
+    if I.ndim == 2:
+        n_filas, n_cols = I.shape
+        n_canales = 1
+    else:
+        n_filas, n_cols, n_canales = I.shape
+ 
+    # ── Factores de escala ────────────────────────────────────────────────────
+    # fx: escala para columnas (dirección X, horizontal)
+    # fy: escala para filas    (dirección Y, vertical)
+    if np.isscalar(S):
+        fx = fy = float(S)
+ 
+    elif len(S) == 2:
+        if isinstance(S[0], int) and isinstance(S[1], int):
+            # S = (nueva_altura, nuevo_ancho) — nuevo tamaño en píxeles
+            fy = float(S[0]) / n_filas   # factor vertical   (filas)
+            fx = float(S[1]) / n_cols    # factor horizontal (columnas)
+        else:
+            # S = (factor_y, factor_x) — factores distintos por eje
+            fy = float(S[0])
+            fx = float(S[1])
+    else:
+        raise ValueError("S debe ser un escalar o una tupla de 2 elementos.")
+ 
+    if fx <= 0 or fy <= 0:
+        raise ValueError("Los factores de escala deben ser positivos.")
+ 
+    # ── Matriz de escalamiento en orden (x, y) = (columnas, filas) ───────────
+    # IMPORTANTE: z y pp usan el MISMO orden (x, y).
+    # Si usásemos z=[n_filas, n_cols, 1] pero pp=[xp, yp, 1]
+    # estaríamos mezclando (y, x) con (x, y) → tamaño incorrecto.
+    S_mat = np.array([
+        [fx,  0,  0],   # escala en X (columnas)
+        [ 0, fy,  0],   # escala en Y (filas)
+        [ 0,  0,  1]
+    ])
+ 
+    z  = np.array([n_cols, n_filas, 1])   # orden (x, y): [ancho, alto, 1]
+    zp = S_mat @ z                        # [fx·n_cols, fy·n_filas, 1]
+ 
+    nuevos_cols  = int(np.ceil(zp[0]))    # nuevo ancho  (columnas)
+    nuevas_filas = int(np.ceil(zp[1]))    # nueva altura (filas)
+ 
+    # ── Matriz inversa (precalculada fuera del bucle) ─────────────────────────
+    S_inv = np.array([
+        [1.0/fx,      0,  0],
+        [     0, 1.0/fy,  0],
+        [     0,      0,  1]
+    ])
+ 
+    # ── Imagen de salida ──────────────────────────────────────────────────────
+    if n_canales == 1:
+        Ip = np.zeros((nuevas_filas, nuevos_cols), dtype=I.dtype)
+    else:
+        Ip = np.zeros((nuevas_filas, nuevos_cols, n_canales), dtype=I.dtype)
+ 
+    # ── Backward mapping ──────────────────────────────────────────────────────
+    for yp in range(nuevas_filas):       # yp: fila en imagen de salida
+        for xp in range(nuevos_cols):    # xp: columna en imagen de salida
+ 
+            pp = np.array([xp, yp, 1])  # coordenada (x, y) en salida
+            p  = S_inv @ pp             # coordenada (x, y) en imagen original
+ 
+            xi = int(np.round(p[0]))    # columna en imagen original
+            yi = int(np.round(p[1]))    # fila en imagen original
+ 
+            if 0 <= xi < n_cols and 0 <= yi < n_filas:
+                if n_canales == 1:
+                    Ip[yp, xp] = I[yi, xi]
+                else:
+                    Ip[yp, xp, :] = I[yi, xi, :]
+ 
+    return Ip
+ 
+ 
+# ─────────────────────────────────────────────────────────────────────────────
+#  imtranslate
+# ─────────────────────────────────────────────────────────────────────────────
+ 
+def imtranslate(I, translation, output_view='same'):
+    """
+    Traslada una imagen usando backward mapping.
+    Solo NumPy, sin librerías externas.
+ 
+    Parámetros
+    ──────────
+    I           : ndarray    — imagen 2D (grises) o 3D (color)
+    translation : array-like — [tx, ty]
+                               tx > 0 → mueve a la DERECHA
+                               ty > 0 → mueve hacia ABAJO
+    output_view : str        — 'same' mantiene el mismo tamaño que la entrada;
+                                      el contenido fuera del borde se descarta.
+                               'full' expande el lienzo en |tx| × |ty| para
+                                      incluir el contenido desplazado.
+                               Default: 'same'
+ 
+    Retorna
+    ───────
+    Ip : ndarray — imagen trasladada, mismo dtype que I.
+
+    """
+ 
+    # ── Dimensiones de la imagen de entrada ──────────────────────────────────
+    if I.ndim == 2:
+        n_filas, n_cols = I.shape
+        n_canales = 1
+    else:
+        n_filas, n_cols, n_canales = I.shape
+ 
+    tx = float(translation[0])
+    ty = float(translation[1])
+ 
+    # ── T⁻¹ precalculada fuera del bucle ─────────────────────────────────────
+    # Para traslación pura la inversa es trivial: cambiar el signo de tx, ty.
+    # No es necesario usar np.linalg.inv (que sería correcto pero costoso
+    # si se recalculara en cada iteración como ocurría en la versión anterior).
+    T_inv = np.array([
+        [1, 0, -tx],
+        [0, 1, -ty],
+        [0, 0,   1]
+    ])
+ 
+    # ── Tamaño del lienzo de salida ───────────────────────────────────────────
+    if output_view == 'full':
+        # Expandir en la magnitud del desplazamiento.
+        nuevos_cols  = n_cols  + int(np.abs(tx))
+        nuevas_filas = n_filas + int(np.abs(ty))
+ 
+    elif output_view == 'same':
+        nuevos_cols  = n_cols
+        nuevas_filas = n_filas
+ 
+    else:
+        raise ValueError("output_view debe ser 'same' o 'full'.")
+ 
+    # ── Imagen de salida ──────────────────────────────────────────────────────
+    if n_canales == 1:
+        Ip = np.zeros((nuevas_filas, nuevos_cols), dtype=I.dtype)
+    else:
+        Ip = np.zeros((nuevas_filas, nuevos_cols, n_canales), dtype=I.dtype)
+ 
+    # ── Backward mapping ──────────────────────────────────────────────────────
+    for yp in range(nuevas_filas):
+        for xp in range(nuevos_cols):
+ 
+            pp = np.array([xp, yp, 1])
+            p  = T_inv @ pp             # [xp - tx, yp - ty, 1]
+ 
+            xi = int(np.round(p[0]))    # columna en imagen original
+            yi = int(np.round(p[1]))    # fila en imagen original
+ 
+            if 0 <= xi < n_cols and 0 <= yi < n_filas:
+                if n_canales == 1:
+                    Ip[yp, xp] = I[yi, xi]
+                else:
+                    Ip[yp, xp, :] = I[yi, xi, :]
+ 
+    return Ip
+ 
